@@ -2,6 +2,7 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 const config = require('../config');
 const socketService = require('./socketService');
+const wsBridge = require('./wsBridge');
 
 class PriceStreamService {
   constructor() {
@@ -31,6 +32,11 @@ class PriceStreamService {
             // On filtre uniquement les symboles configurés
             if (this.symbolsSet.has(data.id)) {
               socketService.broadcast(data);
+              
+              // 🟢 Si c'est l'Or (XAU/USD), on alimente également le wsBridge (Supra WSS/REST) en fallback
+              if (data.id === "Metal.XAU/USD") {
+                wsBridge.updateXauPrice(data.p, data.t * 1000);
+              }
             }
           } catch (e) {
             // Ligne incomplète ou invalide, on ignore

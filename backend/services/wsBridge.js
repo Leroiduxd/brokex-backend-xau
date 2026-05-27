@@ -526,6 +526,38 @@ function handlePriceUpgrade(req, socket, head) {
     }
 }
 
+// 🟢 Fonction permettant d'alimenter le cache WSS depuis le flux Pyth (si Supra renvoie 403 / clé mock)
+function updateXauPrice(price, timestamp = Date.now()) {
+    initCache('xau_usd');
+    const s = state['xau_usd'];
+    s.wsPriceStr = String(price);
+    s.wsTime = String(Math.floor(timestamp / 1000));
+    s.wsTimestamp = timestamp;
+    s.lastWsMs = Date.now();
+    
+    // Émettre en local pour déclencher le triggerEngine immédiatement
+    priceEmitter.emit('price', price);
+
+    // Diffuser immédiatement aux clients connectés
+    const payload = buildSnapshot();
+    if (wss) {
+        wss.clients.forEach((c) => {
+            if (c.readyState === WebSocket.OPEN) {
+                try { c.send(payload); } catch {}
+            }
+        });
+    }
+
+    const goldPayload = buildGoldSnapshot();
+    if (goldWss) {
+        goldWss.clients.forEach((c) => {
+            if (c.readyState === WebSocket.OPEN) {
+                try { c.send(goldPayload); } catch {}
+            }
+        });
+    }
+}
+
 function rebalanceScheduler() {
     (async () => { await rebalance(); })();
     setInterval(rebalance, REFRESH_MS);
@@ -536,5 +568,6 @@ module.exports = {
     attachPriceWSS,
     handlePriceUpgrade,
     rebalanceScheduler,
-    priceEmitter
+    priceEmitter,
+    updateXauPrice
 };
