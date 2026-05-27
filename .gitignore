@@ -1,0 +1,12 @@
+# Backend dependencies and credentials
+backend/node_modules/
+backend/.env
+backend/data/
+backend/database/db.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
