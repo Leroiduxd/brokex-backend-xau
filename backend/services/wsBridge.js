@@ -504,17 +504,20 @@ function attachPriceWSS() {
 function handlePriceUpgrade(req, socket, head) {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = url.pathname;
+    console.log(`[wsBridge Upgrade] Upgrade request received for path: ${pathname}`);
 
-    if (pathname === '/ws/prices') {
+    if (pathname === '/ws/prices' || pathname === '/ws/prices/') {
         if (!wss) {
+            console.warn('[wsBridge Upgrade] wss instance not initialized');
             socket.destroy();
             return;
         }
         wss.handleUpgrade(req, socket, head, (ws) => {
             wss.emit('connection', ws, req);
         });
-    } else if (pathname === '/ws/gold' || pathname === '/ws/xau') {
+    } else if (pathname === '/ws/gold' || pathname === '/ws/gold/' || pathname === '/ws/xau' || pathname === '/ws/xau/') {
         if (!goldWss) {
+            console.warn('[wsBridge Upgrade] goldWss instance not initialized');
             socket.destroy();
             return;
         }
@@ -522,6 +525,7 @@ function handlePriceUpgrade(req, socket, head) {
             goldWss.emit('connection', ws, req);
         });
     } else {
+        console.warn(`[wsBridge Upgrade] Path ${pathname} does not match any route, destroying socket`);
         socket.destroy();
     }
 }
