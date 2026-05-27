@@ -187,8 +187,8 @@ const server = app.listen(PORT, async () => {
     // 6. Start Pyth live price stream
     priceStreamService.start();
 
-    // 7. Start historical candle sync & build timeframes
-    await chartSyncService.start();
+    // 7. Start historical candle sync & build timeframes (non-blocking)
+    chartSyncService.start().catch(err => console.error('[Server] ChartSyncService failed:', err));
 
     // 8. Start Pyth price differences hourly fetch & persist
     await pythPriceDiffService.start();
