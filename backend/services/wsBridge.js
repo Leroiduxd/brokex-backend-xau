@@ -193,10 +193,11 @@ function isPairOpen(p) {
 function buildPageForPair(p) {
     const meta = META[p] || { id: null, name: 'UNKNOWN' };
     const s = state[p] || {};
-    const open = isPairOpen(p);
-    const price = open ? (s.wsPriceStr ?? s.restPriceStr) : (s.restPriceStr ?? s.wsPriceStr);
-    const time = s.wsTime ?? s.restTime;
-    const ts = s.wsTimestamp ?? s.restTimestamp;
+    // Toujours renvoyer le dernier prix connu disponible (WS, REST ou fallback Pyth)
+    const price = s.wsPriceStr || s.restPriceStr;
+    const time = s.wsTime || s.restTime || String(Math.floor(Date.now() / 1000));
+    const ts = s.wsTimestamp || s.restTimestamp || Date.now();
+    
     const haveAny = price || s.h24 || s.l24 || s.ch24 || time || ts;
     const instruments = haveAny ? [{
         time: time ? String(time) : undefined,
