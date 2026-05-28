@@ -7,7 +7,7 @@ const syncService = require('./services/syncService');
 const eventListener = require('./services/eventListener');
 const triggerEngine = require('./services/triggerEngine');
 
-// Import new Chart routes and services
+// Import Chart routes and services
 const candleRouter = require('./routes/candleRoutes');
 const marketSummaryRouter = require('./routes/marketSummaryRoutes');
 const proofRouter = require('./routes/proofRoutes');
@@ -20,7 +20,7 @@ const pythPriceDiffService = require('./services/pythPriceDiffService');
 
 const app = express();
 
-// premium CORS middleware to ensure seamless frontend communication
+// Premium CORS middleware to ensure seamless frontend communication
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -41,12 +41,21 @@ app.use(marketSummaryRouter);
 app.use(proofRouter);
 app.use(kmsRouter);
 
-// Get all trades for a specific trader address (case-insensitive)
+/**
+ * Check if the given network is fully configured in .env.
+ */
+function isNetworkConfigured(network) {
+  if (network === 'testnet') return true;
+  return !!(config.mainnet.RPC_URL && config.mainnet.LENS_ADDRESS && config.mainnet.CORE_ADDRESS);
+}
+
+// Get all trades for a specific trader address (case-insensitive, testnet or mainnet)
 app.get('/trades/:address', (req, res) => {
   try {
     const address = req.params.address.toLowerCase();
+    const network = req.query.network || 'testnet'; // Read network, defaults to testnet
     const dbService = require('./services/dbService');
-    const trades = dbService.getTrades();
+    const trades = dbService.getTrades(network);
     const traderTrades = Object.values(trades).filter(
       t => t.trader && t.trader.toLowerCase() === address
     );
@@ -59,8 +68,9 @@ app.get('/trades/:address', (req, res) => {
 // Get volume stats over the last 24h, last 7 days, all-time, and leverage metrics
 app.get('/stats/volume', (req, res) => {
   try {
+    const network = req.query.network || 'testnet'; // Read network, defaults to testnet
     const dbService = require('./services/dbService');
-    const trades = dbService.getTrades();
+    const trades = dbService.getTrades(network);
     const now = Math.floor(Date.now() / 1000);
     const oneDayAgo = now - 24 * 3600;
     const oneWeekAgo = now - 7 * 24 * 3600;
@@ -139,17 +149,25 @@ app.get('/stats/volume', (req, res) => {
   }
 });
 
-// Simple health/diagnostic status
+// Simple health/diagnostic status for both networks
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    config: {
-      RPC_URL: config.RPC_URL,
-      WS_URL: config.WS_URL,
-      CORE_ADDRESS: config.CORE_ADDRESS,
-      LENS_ADDRESS: config.LENS_ADDRESS,
-      SIGNER_LOADED: !!config.PRIVATE_KEY && config.PRIVATE_KEY !== '0x0000000000000000000000000000000000000000000000000000000000000000'
+    testnet: {
+      RPC_URL: config.testnet.RPC_URL,
+      WS_URL: config.testnet.WS_URL,
+      CORE_ADDRESS: config.testnet.CORE_ADDRESS,
+      LENS_ADDRESS: config.testnet.LENS_ADDRESS,
+      SIGNER_LOADED: !!config.testnet.PRIVATE_KEY && config.testnet.PRIVATE_KEY !== '0x0000000000000000000000000000000000000000000000000000000000000000'
+    },
+    mainnet: {
+      configured: isNetworkConfigured('mainnet'),
+      RPC_URL: config.mainnet.RPC_URL,
+      WS_URL: config.mainnet.WS_URL,
+      CORE_ADDRESS: config.mainnet.CORE_ADDRESS,
+      LENS_ADDRESS: config.mainnet.LENS_ADDRESS,
+      SIGNER_LOADED: !!config.mainnet.PRIVATE_KEY && config.mainnet.PRIVATE_KEY !== '0x0000000000000000000000000000000000000000000000000000000000000000'
     }
   });
 });
@@ -159,25 +177,39 @@ const PORT = config.PORT || 3000;
 // Start server and launch background jobs
 const server = app.listen(PORT, async () => {
   console.log(`\n======================================================`);
-  console.log(`  Brokex Unified Keeper & Chart Backend on port ${PORT}`);
+  console.log(`  Brokex Unified Dual Keeper & Chart Backend on port ${PORT}`);
   console.log(`======================================================`);
-  console.log(`* RPC URL:      ${config.RPC_URL}`);
-  console.log(`* WS URL:       ${config.WS_URL}`);
-  console.log(`* Core Address: ${config.CORE_ADDRESS}`);
-  console.log(`* Lens Address: ${config.LENS_ADDRESS}`);
-  console.log(`======================================================\n`);
+  console.log(`* 🧪 [TESTNET] RPC:  ${config.testnet.RPC_URL}`);
+  console.log(`* 🧪 [TESTNET] WS:   ${config.testnet.WS_URL}`);
+  console.log(`* 🧪 [TESTNET] Core: ${config.testnet.CORE_ADDRESS}`);
+  console.log(`======================================================`);
+  if (isNetworkConfigured('mainnet')) {
+    console.log(`* 🚀 [MAINNET] RPC:  ${config.mainnet.RPC_URL}`);
+    console.log(`* 🚀 [MAINNET] WS:   ${config.mainnet.WS_URL}`);
+    console.log(`* 🚀 [MAINNET] Core: ${config.mainnet.CORE_ADDRESS}`);
+    console.log(`======================================================\n`);
+  } else {
+    console.log(`* 🚀 [MAINNET] Not configured or incomplete in .env.`);
+    console.log(`======================================================\n`);
+  }
 
   try {
-    // 1. Boot up: perform initial trade sync up to highest block Trade ID
-    await syncService.performInitialSync();
+    // 1. Boot up: perform initial trade sync up to highest block Trade ID for both environments
+    await syncService.performInitialSync('testnet');
+    if (isNetworkConfigured('mainnet')) {
+      await syncService.performInitialSync('mainnet');
+    }
 
-    // 2. Schedule continuous safety check every 30 seconds
+    // 2. Schedule continuous safety check every 30 seconds (runs both internally)
     syncService.startPeriodicSync();
 
-    // 3. Connect real-time WebSocket listener for immediate updates
-    eventListener.startEventListener();
+    // 3. Connect real-time WebSocket listeners
+    eventListener.startEventListener('testnet');
+    if (isNetworkConfigured('mainnet')) {
+      eventListener.startEventListener('mainnet');
+    }
 
-    // 4. Start automated real-time price trigger engine (Supra REST)
+    // 4. Start automated real-time price trigger engine (evaluates both internally)
     triggerEngine.startTriggerEngine();
 
     // 5. Start Supra WS Price stream & scheduler
@@ -193,7 +225,7 @@ const server = app.listen(PORT, async () => {
     // 8. Start Pyth price differences hourly fetch & persist
     await pythPriceDiffService.start();
 
-    console.log(`[Server] All unified subsystems started successfully!`);
+    console.log(`[Server] All dual-network subsystems started successfully!`);
   } catch (error) {
     console.error(`[Server] CRITICAL: Engine failed during startup sequence:`, error);
   }

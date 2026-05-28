@@ -2,7 +2,6 @@
 const axios = require('axios');
 
 // ── Config en dur
-const DORA_RPC   = 'https://rpc-testnet-dora-2.supra.com';
 const DORA_CHAIN = 'evm';
 
 // ─────────────────────────────────────────────────────────────
@@ -80,7 +79,6 @@ class PullServiceClient {
         const json = await this._post(cand.url, cand.body);
         const proof = cand.pick(json);
         if (proof) return { proof_bytes: String(proof) };
-        // Certains renvoient { data: { proof_bytes } }
         if (json?.data?.proof_bytes) return { proof_bytes: String(json.data.proof_bytes) };
         lastErr = new Error(`No proof_bytes in response from ${cand.url}`);
       } catch (e) {
@@ -94,22 +92,30 @@ class PullServiceClient {
 // ─────────────────────────────────────────────────────────────
 // Client Supra DORA Pull et cache global (1s) unifié
 // ─────────────────────────────────────────────────────────────
-const client = new PullServiceClient(DORA_RPC);
-const cache = new Map(); // key = "0,1,2" ; value = { proof, timestamp }
+const clients = {
+  testnet: new PullServiceClient('https://rpc-testnet-dora-2.supra.com'),
+  mainnet: new PullServiceClient('https://mainnet-dora-2.supra.com:443')
+};
+
+const cache = new Map(); // key = "network:pairs" ; value = { proof, timestamp }
 
 /**
  * Fetch caching Supra DORA oracle pull proof for specific asset pair indexes.
+ * Supports: getSupraProof(pairIndexes, network)
  * @param {number[]} pairIndexes Array of pair indexes (e.g. [5500] for XAU/USD)
+ * @param {string} network 'testnet' | 'mainnet'
  * @returns {Promise<string>} The proof hex string (starts with '0x')
  */
-async function getSupraProof(pairIndexes) {
-  const key = [...pairIndexes].sort((a, b) => a - b).join(',');
+async function getSupraProof(pairIndexes, network = 'testnet') {
+  const activeNetwork = network === 'mainnet' ? 'mainnet' : 'testnet';
+  const pairsKey = [...pairIndexes].sort((a, b) => a - b).join(',');
+  const key = `${activeNetwork}:${pairsKey}`;
   const now = Date.now();
   const cached = cache.get(key);
   
   if (cached) {
     if (now - cached.timestamp < 1000) {
-      console.log(`🔄 [SupraProofService Cache] hit pairs=[${key}] age=${now - cached.timestamp}ms`);
+      console.log(`🔄 [SupraProofService Cache] hit network=${activeNetwork} pairs=[${pairsKey}] age=${now - cached.timestamp}ms`);
       return cached.proof;
     } else {
       // Nettoie activement de la mémoire si expiré
@@ -117,7 +123,8 @@ async function getSupraProof(pairIndexes) {
     }
   }
 
-  console.log(`🌐 [SupraProofService Fetch] Fetching oracle proof for pairs: [${key}]...`);
+  console.log(`🌐 [SupraProofService Fetch] Fetching oracle proof for network=${activeNetwork} pairs: [${pairsKey}]...`);
+  const client = clients[activeNetwork];
   const data = await client.getProof({ pair_indexes: pairIndexes, chain_type: DORA_CHAIN });
   const proofBytes = data.proof_bytes;
   const proof = String(proofBytes).startsWith('0x') ? proofBytes : '0x' + proofBytes;
@@ -129,7 +136,7 @@ async function getSupraProof(pairIndexes) {
     const entry = cache.get(key);
     if (entry && entry.timestamp === now) {
       cache.delete(key);
-      console.log(`🗑️ [SupraProofService Cache] cleared memory for pairs=[${key}]`);
+      console.log(`🗑️ [SupraProofService Cache] cleared memory for network=${activeNetwork} pairs=[${pairsKey}]`);
     }
   }, 1000);
 

@@ -1,39 +1,45 @@
 const express = require('express');
 const { ethers } = require('ethers');
+const config = require('../config/config');
 
 const router = express.Router();
 
-// Récupération de la clé de signature KMS via ENV ou fallback
-const KMS_PRIVATE_KEY =
-  process.env.KMS_PRIVATE_KEY ||
-  "0xe12f9b03327a875c2d5bf9b40a75cd2effeed46ea508ee595c6bc708c386da8c";
-
-const signer = new ethers.Wallet(KMS_PRIVATE_KEY);
+// Initialize testnet & mainnet wallets for risk signing
+const signerTestnet = new ethers.Wallet(config.testnet.KMS_PRIVATE_KEY);
+const signerMainnet = config.mainnet.KMS_PRIVATE_KEY 
+  ? new ethers.Wallet(config.mainnet.KMS_PRIVATE_KEY) 
+  : null;
 
 // --------------------------------------------------
-// CONFIG V1
+// CONFIG V1 (Risk limits)
 // --------------------------------------------------
-const MAX_OI = BigInt("1000000000000000"); // très haut
+const MAX_OI = BigInt("1000000000000000"); // very high limit
 const ALPHA = BigInt("1000000"); // 1e6 = 100%
 
-// spread PRECISION = 1e6
-// 1000 = 0.1%
+// spread PRECISION = 1e6 (1000 = 0.1%)
 const SPREAD_LONG  = BigInt("1000");
 const SPREAD_SHORT = BigInt("1000");
 
 const EXPIRY_SECONDS = 3600;
 
-// --------------------------------------------------
-
 /**
- * GET /kms-proof
- * Génère et signe une proof KMS/Risk à la volée
+ * GET /kms-proof?network=testnet
+ * Generates and signs a KMS/Risk proof on the fly
  */
-router.get('/kms-proof', async (_req, res) => {
+router.get('/kms-proof', async (req, res) => {
   try {
+    const network = req.query.network || 'testnet';
+    const signer = network === 'mainnet' ? signerMainnet : signerTestnet;
+
+    if (!signer) {
+      return res.status(400).json({
+        error: `KMS Private Key for MAINNET is not configured in .env. Please define MAINNET_KMS_PRIVATE_KEY.`
+      });
+    }
+
     const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
 
-    // même hash que le Core
+    // Same hashing layout as Core smart contract
     const hash = ethers.solidityPackedKeccak256(
       [
         "uint256", // maxOILong

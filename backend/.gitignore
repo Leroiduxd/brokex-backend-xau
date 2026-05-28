@@ -3,7 +3,8 @@ node_modules/
 
 # Local data files and persistent storage
 data/
-database/db.json
+database/
+
 
 # Environment variables containing sensitive keys/passwords
 .env

@@ -2,23 +2,34 @@
 
 Ce document répertorie tous les endpoints HTTP et les flux WebSocket disponibles sur le serveur unifié de **Brokex Keeper & Chart** (qui tourne par défaut sur `http://localhost:3000`).
 
+> [!NOTE]
+> Le serveur supporte désormais en parallèle les réseaux **Testnet** et **Mainnet**. Pour chaque endpoint listé ci-dessous (sauf mention contraire), vous pouvez spécifier le réseau via le paramètre de requête `?network=mainnet` ou `?network=testnet` (valeur par défaut : `testnet`).
+
 ---
 
 ## 📡 1. Endpoints HTTP (API REST)
 
 ### 🏥 Diagnostic & Statut
 #### `GET /health`
-* **Description** : Retourne l'état de santé du backend, l'état de chargement du Wallet Signer et les adresses des smart contracts.
+* **Description** : Retourne l'état de santé du backend, l'état de chargement du Wallet Signer et les adresses des smart contracts pour les configurations **Testnet** et **Mainnet** séparément.
 * **Exemple de réponse** :
   ```json
   {
     "status": "OK",
     "timestamp": "2026-05-27T20:30:15.123Z",
-    "config": {
+    "testnet": {
       "RPC_URL": "https://atlantic.dplabs-internal.com",
       "WS_URL": "wss://atlantic.dplabs-internal.com",
       "CORE_ADDRESS": "0x302d139487Dcb7bd0Fa3466aF51049a70EAF4353",
       "LENS_ADDRESS": "0xD9B592d2Cb993dFcC04D893DE3e5c322bB626f84",
+      "SIGNER_LOADED": true
+    },
+    "mainnet": {
+      "configured": true,
+      "RPC_URL": "https://rpc.mainnet.example.com",
+      "WS_URL": "wss://rpc.mainnet.example.com/ws",
+      "CORE_ADDRESS": "0x1234...",
+      "LENS_ADDRESS": "0x5678...",
       "SIGNER_LOADED": true
     }
   }
@@ -103,8 +114,9 @@ Ce document répertorie tous les endpoints HTTP et les flux WebSocket disponible
   * **Partage (< 1 seconde)** : Si plusieurs requêtes arrivent dans un intervalle de moins de 1 seconde, la même proof est renvoyée instantanément sans surcharger le RPC.
   * **Libération Active** : Au bout d'exactement 1 seconde, la proof est **activement supprimée de la mémoire vive** (`setTimeout`) pour garantir une empreinte mémoire de 0.
 * **Paramètres de requête** :
-  * `pairs` (Requis) : Index de paires séparés par une virgule. (Ex: `5500` pour XAU/USD)
-* **Exemple de requête** : `GET /proof?pairs=5500`
+  * `pairs` (Requis) : Index de paires séparés par une virgule (Ex: `5500` pour XAU/USD).
+  * `network` (Optionnel) : `'testnet'` ou `'mainnet'` (Défaut: `'testnet'`).
+* **Exemple de requête** : `GET /proof?pairs=5500&network=mainnet`
 * **Exemple de réponse** :
   ```json
   {
@@ -117,6 +129,9 @@ Ce document répertorie tous les endpoints HTTP et les flux WebSocket disponible
 ### 🔑 Signatures & KMS Proofs
 #### `GET /kms-proof`
 * **Description** : Génère et signe en direct une proof KMS/Risk à la volée en utilisant le même algorithme et le même hash que le smart contract BrokexCore pour autoriser l'exécution des ordres.
+* **Paramètres de requête** :
+  * `network` (Optionnel) : `'testnet'` ou `'mainnet'` (Défaut: `'testnet'`).
+* **Exemple de requête** : `GET /kms-proof?network=mainnet`
 * **Exemple de réponse** :
   ```json
   {
@@ -135,8 +150,10 @@ Ce document répertorie tous les endpoints HTTP et les flux WebSocket disponible
 
 ### 💼 Statistiques du Protocole & Trades
 #### `GET /trades/:address`
-* **Description** : Récupère tous les trades (actifs et fermés) associés à une adresse Ethereum spécifique (insensible à la casse).
-* **Exemple de requête** : `GET /trades/0xca30cd2760e48af1be32c8420e71803da6735142`
+* **Description** : Récupère tous les trades (actifs et fermés) associés à une adresse Ethereum spécifique (insensible à la casse) depuis la base de données.
+* **Paramètres de requête** :
+  * `network` (Optionnel) : `'testnet'` ou `'mainnet'` (Défaut: `'testnet'`).
+* **Exemple de requête** : `GET /trades/0xca30cd2760e48af1be32c8420e71803da6735142?network=mainnet`
 * **Exemple de réponse** :
   ```json
   [
@@ -158,6 +175,9 @@ Ce document répertorie tous les endpoints HTTP et les flux WebSocket disponible
 
 #### `GET /stats/volume`
 * **Description** : Fournit des indicateurs analytiques globales sur le protocole (volume d'échange sur 24 heures, 7 jours, total cumulé et effets de levier moyens).
+* **Paramètres de requête** :
+  * `network` (Optionnel) : `'testnet'` ou `'mainnet'` (Défaut: `'testnet'`).
+* **Exemple de requête** : `GET /stats/volume?network=mainnet`
 * **Exemple de réponse** :
   ```json
   {

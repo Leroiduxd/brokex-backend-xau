@@ -9,24 +9,43 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-const dbPath = path.join(dbDir, 'db.json');
-const adapter = new FileSync(dbPath);
-const db = low(adapter);
+// Database paths
+const oldDbPath = path.join(dbDir, 'db.json');
+const testnetDbPath = path.join(dbDir, 'db_testnet.json');
+const mainnetDbPath = path.join(dbDir, 'db_mainnet.json');
 
-// Set defaults for LowDB as requested:
-// Structure:
-// {
-//   "meta": {
-//     "lastTradeId": 0
-//   },
-//   "trades": {}
-// }
-db.defaults({
-  meta: {
-    lastTradeId: 0
-  },
+// Proactive Migration: Copy old db.json to db_testnet.json if testnet doesn't exist yet
+if (fs.existsSync(oldDbPath) && !fs.existsSync(testnetDbPath)) {
+  try {
+    fs.copyFileSync(oldDbPath, testnetDbPath);
+    console.log(`[dbService] Successfully migrated legacy db.json to db_testnet.json`);
+  } catch (err) {
+    console.error(`[dbService] Legacy db.json migration failed:`, err.message);
+  }
+}
+
+// Initialize LowDB adapters
+const testnetAdapter = new FileSync(testnetDbPath);
+const dbTestnet = low(testnetAdapter);
+dbTestnet.defaults({
+  meta: { lastTradeId: 0 },
   trades: {}
 }).write();
+
+const mainnetAdapter = new FileSync(mainnetDbPath);
+const dbMainnet = low(mainnetAdapter);
+dbMainnet.defaults({
+  meta: { lastTradeId: 0 },
+  trades: {}
+}).write();
+
+/**
+ * Retrieve LowDB instance based on network name.
+ * @param {string} network 'testnet' | 'mainnet'
+ */
+function getDb(network = 'testnet') {
+  return network === 'mainnet' ? dbMainnet : dbTestnet;
+}
 
 /**
  * Convert ethers/solidity trade struct values into clean serializable JSON values.
@@ -57,57 +76,103 @@ function formatTrade(t) {
 module.exports = {
   /**
    * Retrieve the highest synchronized trade ID.
+   * Supports signature: getLastTradeId(network)
+   * @param {string} network 
    * @returns {number}
    */
-  getLastTradeId: () => {
+  getLastTradeId: (network = 'testnet') => {
+    const db = getDb(network);
     return db.get('meta.lastTradeId').value() || 0;
   },
 
   /**
    * Update the highest synchronized trade ID.
-   * @param {number|string} id 
+   * Supports: setLastTradeId(network, id) or legacy setLastTradeId(id) [defaults to testnet]
+   * @param {string|number} networkOrId
+   * @param {number|string} [id]
    */
-  setLastTradeId: (id) => {
-    db.set('meta.lastTradeId', Number(id)).write();
+  setLastTradeId: (networkOrId, id) => {
+    let network = 'testnet';
+    let targetId = networkOrId;
+    if (networkOrId === 'testnet' || networkOrId === 'mainnet') {
+      network = networkOrId;
+      targetId = id;
+    }
+    const db = getDb(network);
+    db.set('meta.lastTradeId', Number(targetId)).write();
   },
 
   /**
    * Fetch a single trade by ID from db.json.
-   * @param {number|string} id 
+   * Supports: getTrade(network, id) or legacy getTrade(id) [defaults to testnet]
+   * @param {string|number} networkOrId
+   * @param {number|string} [id]
    * @returns {Object|undefined}
    */
-  getTrade: (id) => {
-    return db.get(`trades.${id}`).value();
+  getTrade: (networkOrId, id) => {
+    let network = 'testnet';
+    let targetId = networkOrId;
+    if (networkOrId === 'testnet' || networkOrId === 'mainnet') {
+      network = networkOrId;
+      targetId = id;
+    }
+    const db = getDb(network);
+    return db.get(`trades.${targetId}`).value();
   },
 
   /**
-   * Fetch all trades from db.json.
+   * Fetch all trades from the database.
+   * Supports: getTrades(network)
+   * @param {string} network
    * @returns {Object} Keyed by ID string
    */
-  getTrades: () => {
+  getTrades: (network = 'testnet') => {
+    const db = getDb(network);
     return db.get('trades').value() || {};
   },
 
   /**
    * Save or update a single trade.
-   * @param {number|string} id 
-   * @param {Object} tradeData 
+   * Supports: setTrade(network, id, tradeData) or legacy setTrade(id, tradeData) [defaults to testnet]
+   * @param {string|number} networkOrId
+   * @param {number|string|Object} idOrTradeData
+   * @param {Object} [tradeData]
    */
-  setTrade: (id, tradeData) => {
-    const formatted = formatTrade(tradeData);
-    db.set(`trades.${id}`, formatted).write();
+  setTrade: (networkOrId, idOrTradeData, tradeData) => {
+    let network = 'testnet';
+    let targetId = networkOrId;
+    let data = idOrTradeData;
+    if (networkOrId === 'testnet' || networkOrId === 'mainnet') {
+      network = networkOrId;
+      targetId = idOrTradeData;
+      data = tradeData;
+    }
+    const db = getDb(network);
+    const formatted = formatTrade(data);
+    db.set(`trades.${targetId}`, formatted).write();
   },
 
   /**
    * Save multiple trades in batch to optimize database writes.
    * Updates meta.lastTradeId accordingly.
-   * @param {Array} tradesArray 
+   * Supports: saveTradesBatch(network, tradesArray) or legacy saveTradesBatch(tradesArray) [defaults to testnet]
+   * @param {string|Array} networkOrArray
+   * @param {Array} [tradesArray]
    */
-  saveTradesBatch: (tradesArray) => {
+  saveTradesBatch: (networkOrArray, tradesArray) => {
+    let network = 'testnet';
+    let arr = networkOrArray;
+    if (networkOrArray === 'testnet' || networkOrArray === 'mainnet') {
+      network = networkOrArray;
+      arr = tradesArray;
+    }
+    if (!Array.isArray(arr)) return;
+
+    const db = getDb(network);
     const tradesObj = db.get('trades').value() || {};
     let maxId = db.get('meta.lastTradeId').value() || 0;
 
-    tradesArray.forEach(t => {
+    arr.forEach(t => {
       if (!t || !t.id) return;
       const idStr = t.id.toString();
       const idNum = Number(idStr);

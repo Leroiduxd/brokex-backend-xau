@@ -4,6 +4,7 @@ const dbService = require('../services/dbService');
 const supraProofService = require('../services/supraProofService');
 const kmsProofService = require('../services/kmsProofService');
 const executeService = require('../services/executeService');
+const config = require('../config/config');
 const { ethers } = require('ethers');
 
 /**
@@ -18,14 +19,23 @@ function normalizePrice(price, decimals) {
 }
 
 /**
+ * Check if the given network is fully configured in .env.
+ */
+function isNetworkConfigured(network) {
+  if (network === 'testnet') return true;
+  return !!(config.mainnet.RPC_URL && config.mainnet.LENS_ADDRESS && config.mainnet.CORE_ADDRESS);
+}
+
+/**
  * Iterates through active trades in LowDB and determines which are executable
  * under the provided raw oracle price.
  * 
+ * @param {string} network 'testnet' | 'mainnet'
  * @param {BigInt} oraclePrice 
  * @returns {Array<Object>} List of executable items
  */
-async function getExecutableTrades(oraclePrice) {
-  const trades = dbService.getTrades();
+async function getExecutableTrades(network, oraclePrice) {
+  const trades = dbService.getTrades(network);
   const executable = [];
 
   for (const id in trades) {
@@ -118,22 +128,29 @@ async function getExecutableTrades(oraclePrice) {
  * 
  * Handled in two modes:
  * 1. Read Mode:
- *    Body: { "price": "3360000" }
+ *    Body: { "price": "3360000", "network": "mainnet" }
  *    Returns: { "executable": [...] }
  * 
  * 2. Execution Mode:
- *    Body: { "execute": true, "pairIndexes": [5500] }
- *    Fetches latest proofs, matches local executable conditions, submits to block chain,
+ *    Body: { "execute": true, "pairIndexes": [5500], "network": "mainnet" }
+ *    Fetches latest proofs, matches local executable conditions, submits to blockchain,
  *    and returns transaction hash, executed and skipped IDs.
  */
 router.post('/', async (req, res) => {
   try {
     const { price, execute, pairIndexes } = req.body;
+    const network = req.body.network || req.query.network || 'testnet'; // Read network, defaults to testnet
+
+    if (!isNetworkConfigured(network)) {
+      return res.status(400).json({ 
+        error: `Requested network '${network}' is not fully configured in .env.` 
+      });
+    }
 
     // --- MODE 1: READ MODE (Lecture) ---
     if (price && !execute) {
-      console.log(`[KeeperRoute] Read Mode triggered with oracle price: ${price}`);
-      const executable = await getExecutableTrades(BigInt(price));
+      console.log(`[KeeperRoute] [${network.toUpperCase()}] Read Mode triggered with oracle price: ${price}`);
+      const executable = await getExecutableTrades(network, BigInt(price));
       
       return res.json({
         executable: executable.map(item => ({
@@ -147,24 +164,26 @@ router.post('/', async (req, res) => {
     // --- MODE 2: EXECUTION MODE (Execution) ---
     if (execute) {
       const pairs = pairIndexes || [5500]; // Default to Gold (5500) if not provided
-      console.log(`[KeeperRoute] Execution Mode triggered for pairs: [${pairs.join(', ')}]`);
+      console.log(`[KeeperRoute] [${network.toUpperCase()}] Execution Mode triggered for pairs: [${pairs.join(', ')}]`);
 
       // 1. Fetch Supra and KMS Proofs concurrently
-      console.log('[KeeperRoute] Fetching oracle and risk proofs...');
+      console.log(`[KeeperRoute] [${network.toUpperCase()}] Fetching oracle and risk proofs...`);
       const [supraProof, kmsProof] = await Promise.all([
-        supraProofService.getSupraProof(pairs),
-        kmsProofService.getKmsProof()
+        supraProofService.getSupraProof(pairs, network),
+        kmsProofService.getKmsProof(network)
       ]);
 
       // 2. Query oracle price off the Supra proof using contract staticCall
-      const coreContract = executeService.getContract();
-      const provider = executeService.getProvider();
+      const coreContract = executeService.getContract(network);
+      const provider = executeService.getProvider(network);
       
       if (!coreContract) {
-        return res.status(500).json({ error: 'Keeper Signer / Contract not initialized. Verify PRIVATE_KEY in .env.' });
+        return res.status(500).json({ 
+          error: `Keeper Signer / Contract not initialized for network ${network.toUpperCase()}. Verify PRIVATE_KEY or RPC_URL in .env.` 
+        });
       }
 
-      console.log('[KeeperRoute] Querying price from Supra proof via staticCall...');
+      console.log(`[KeeperRoute] [${network.toUpperCase()}] Querying price from Supra proof via staticCall...`);
       const oracleAddress = await coreContract.oracle();
       const oracleAbi = [
         "function verifyOracleProofV2(bytes calldata _bytesProof) external returns (tuple(uint256[] pairs, uint256[] prices, uint256[] timestamp, uint256[] decimal, uint256[] round) info)"
@@ -184,14 +203,14 @@ router.post('/', async (req, res) => {
       const rawPrice = info.prices[assetIndex];
       const decimals = info.decimal[assetIndex];
       const normalizedPrice = normalizePrice(rawPrice, decimals);
-      console.log(`[KeeperRoute] Oracle Price resolved: ${normalizedPrice.toString()} (Raw: ${rawPrice.toString()}, Decimals: ${decimals.toString()})`);
+      console.log(`[KeeperRoute] [${network.toUpperCase()}] Oracle Price resolved: ${normalizedPrice.toString()} (Raw: ${rawPrice.toString()}, Decimals: ${decimals.toString()})`);
 
       // 3. Determine executable trades based on this price
-      const executable = await getExecutableTrades(normalizedPrice);
-      console.log(`[KeeperRoute] Local check: found ${executable.length} executable trades.`);
+      const executable = await getExecutableTrades(network, normalizedPrice);
+      console.log(`[KeeperRoute] [${network.toUpperCase()}] Local check: found ${executable.length} executable trades.`);
 
       if (executable.length === 0) {
-        console.log('[KeeperRoute] No trades meet execution thresholds. Skipping transaction.');
+        console.log(`[KeeperRoute] [${network.toUpperCase()}] No trades meet execution thresholds. Skipping transaction.`);
         return res.json({
           txHash: null,
           executedIds: [],
@@ -203,8 +222,8 @@ router.post('/', async (req, res) => {
       const tradeIds = executable.map(item => item.tradeId);
       const reasons = executable.map(item => item.reason);
 
-      console.log(`[KeeperRoute] Submitting batch execution to contract for trades: [${tradeIds.join(', ')}]...`);
-      const result = await executeService.batchExecute(tradeIds, reasons, supraProof, kmsProof);
+      console.log(`[KeeperRoute] [${network.toUpperCase()}] Submitting batch execution to contract for trades: [${tradeIds.join(', ')}]...`);
+      const result = await executeService.batchExecute(network, tradeIds, reasons, supraProof, kmsProof);
 
       // Return details
       return res.json({
@@ -219,7 +238,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[KeeperRoute] Exception in keeper endpoint:', error);
+    console.error(`[KeeperRoute] [${network.toUpperCase()}] Exception in keeper endpoint:`, error);
     return res.status(500).json({ 
       error: error.message || 'Internal keeper backend error' 
     });

@@ -2,54 +2,89 @@ const { ethers } = require('ethers');
 const config = require('../config/config');
 const coreAbi = require('../abi/coreAbi');
 
-// Initialize provider and signer
-const provider = new ethers.JsonRpcProvider(config.RPC_URL);
-let wallet;
-let coreContract;
+// Initialize provider maps
+const providers = {
+  testnet: new ethers.JsonRpcProvider(config.testnet.RPC_URL),
+  mainnet: config.mainnet.RPC_URL ? new ethers.JsonRpcProvider(config.mainnet.RPC_URL) : null
+};
 
-if (config.PRIVATE_KEY && config.PRIVATE_KEY !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+const wallets = {};
+const coreContracts = {};
+
+// 🧪 Testnet setups
+if (config.testnet.PRIVATE_KEY && config.testnet.PRIVATE_KEY !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
   try {
-    wallet = new ethers.Wallet(config.PRIVATE_KEY, provider);
-    const coreAddress = (config.CORE_ADDRESS || '').toLowerCase();
-    coreContract = new ethers.Contract(coreAddress, coreAbi, wallet);
-    console.log(`[ExecuteService] Ethers Wallet Signer initialized with address: ${wallet.address}`);
+    wallets.testnet = new ethers.Wallet(config.testnet.PRIVATE_KEY, providers.testnet);
+    const coreAddress = (config.testnet.CORE_ADDRESS || '').toLowerCase();
+    coreContracts.testnet = new ethers.Contract(coreAddress, coreAbi, wallets.testnet);
+    console.log(`[ExecuteService] [TESTNET] Ethers Wallet Signer initialized with address: ${wallets.testnet.address}`);
   } catch (err) {
-    console.error(`[ExecuteService] Failed to initialize wallet: ${err.message}`);
+    console.error(`[ExecuteService] [TESTNET] Failed to initialize wallet: ${err.message}`);
   }
-} else {
-  console.warn(`[ExecuteService] WARNING: PRIVATE_KEY is not set or is still a placeholder. batchExecute transactions will fail.`);
+}
+
+// 🚀 Mainnet setups
+if (config.mainnet.PRIVATE_KEY && config.mainnet.RPC_URL && config.mainnet.PRIVATE_KEY !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+  try {
+    wallets.mainnet = new ethers.Wallet(config.mainnet.PRIVATE_KEY, providers.mainnet);
+    const coreAddress = (config.mainnet.CORE_ADDRESS || '').toLowerCase();
+    coreContracts.mainnet = new ethers.Contract(coreAddress, coreAbi, wallets.mainnet);
+    console.log(`[ExecuteService] [MAINNET] Ethers Wallet Signer initialized with address: ${wallets.mainnet.address}`);
+  } catch (err) {
+    console.error(`[ExecuteService] [MAINNET] Failed to initialize wallet: ${err.message}`);
+  }
 }
 
 /**
  * Execute a batch of trades on the BrokexCore smart contract.
  * Logs and filters actual results from TradeEvents.
+ * Supports signature: batchExecute(network, tradeIds, reasons, supraProof, kmsProof)
+ * Or legacy: batchExecute(tradeIds, reasons, supraProof, kmsProof) [defaults to testnet]
  * 
- * @param {number[]|string[]} tradeIds Array of trade IDs to execute
- * @param {number[]} reasons Array of reasons corresponding to tradeIds (1=SL, 2=TP, 3=LIQ, 0=LIMIT/STOP)
- * @param {string} supraProof The Supra Oracle pull proof (hex string starting with '0x')
- * @param {Object} kmsProof The KMS proof object fetched from kmsProofService
+ * @param {string|number[]} networkOrTradeIds
+ * @param {number[]|string[]} tradeIdsOrReasons
+ * @param {number[]|string} reasonsOrSupraProof
+ * @param {string|Object} [supraProofOrKmsProof]
+ * @param {Object} [kmsProof]
  * @returns {Promise<Object>} Object containing tx hash, executed IDs and skipped IDs
  */
-async function batchExecute(tradeIds, reasons, supraProof, kmsProof) {
-  if (!wallet || !coreContract) {
-    throw new Error('[ExecuteService] Wallet not initialized. Please verify PRIVATE_KEY and RPC_URL in .env.');
+async function batchExecute(networkOrTradeIds, tradeIdsOrReasons, reasonsOrSupraProof, supraProofOrKmsProof, kmsProof) {
+  let network = 'testnet';
+  let tradeIds = networkOrTradeIds;
+  let reasons = tradeIdsOrReasons;
+  let supraProof = reasonsOrSupraProof;
+  let actualKmsProof = supraProofOrKmsProof;
+
+  if (networkOrTradeIds === 'testnet' || networkOrTradeIds === 'mainnet') {
+    network = networkOrTradeIds;
+    tradeIds = tradeIdsOrReasons;
+    reasons = reasonsOrSupraProof;
+    supraProof = supraProofOrKmsProof;
+    actualKmsProof = kmsProof;
   }
 
-  if (tradeIds.length === 0) {
+  const wallet = wallets[network];
+  const coreContract = coreContracts[network];
+
+  if (!wallet || !coreContract) {
+    throw new Error(`[ExecuteService] [${network.toUpperCase()}] Wallet or contract not initialized. Please verify PRIVATE_KEY and RPC_URL in .env.`);
+  }
+
+  if (!Array.isArray(tradeIds) || tradeIds.length === 0) {
     return { hash: null, executedIds: [], skippedIds: [] };
   }
 
-  console.log(`[ExecuteService] Initiating batchExecute for trades: [${tradeIds.join(', ')}]...`);
+  console.log(`[ExecuteService] [${network.toUpperCase()}] Initiating batchExecute for trades: [${tradeIds.join(', ')}]...`);
 
   // Construct riskProofs array matching the length of tradeIds
   const riskProofs = tradeIds.map(() => ({
-    maxOILong: BigInt(kmsProof.maxOILong),
-    maxOIShort: BigInt(kmsProof.maxOIShort),
-    alphaLock: BigInt(kmsProof.alphaLock),
-    spreadLong: BigInt(kmsProof.spreadLong),
-    spreadShort: BigInt(kmsProof.spreadShort),
-    expiry: BigInt(kmsProof.expiry),
-    sig: kmsProof.signature
+    maxOILong: BigInt(actualKmsProof.maxOILong),
+    maxOIShort: BigInt(actualKmsProof.maxOIShort),
+    alphaLock: BigInt(actualKmsProof.alphaLock),
+    spreadLong: BigInt(actualKmsProof.spreadLong),
+    spreadShort: BigInt(actualKmsProof.spreadShort),
+    expiry: BigInt(actualKmsProof.expiry),
+    sig: actualKmsProof.signature
   }));
 
   try {
@@ -61,9 +96,9 @@ async function batchExecute(tradeIds, reasons, supraProof, kmsProof) {
       riskProofs
     );
 
-    console.log(`[ExecuteService] Transaction sent: ${tx.hash}. Waiting for confirmation...`);
+    console.log(`[ExecuteService] [${network.toUpperCase()}] Transaction sent: ${tx.hash}. Waiting for confirmation...`);
     const receipt = await tx.wait();
-    console.log(`[ExecuteService] Transaction confirmed in block ${receipt.blockNumber}`);
+    console.log(`[ExecuteService] [${network.toUpperCase()}] Transaction confirmed in block ${receipt.blockNumber}`);
 
     const executedIds = [];
     const skippedIds = [];
@@ -73,8 +108,10 @@ async function batchExecute(tradeIds, reasons, supraProof, kmsProof) {
     const tradeEventTopic = iface.getEvent('TradeEvent').topicHash;
 
     const emittedTradeIds = new Set();
+    const targetCoreAddress = (config[network].CORE_ADDRESS || '').toLowerCase();
+    
     receipt.logs.forEach(log => {
-      if (log.address.toLowerCase() === config.CORE_ADDRESS.toLowerCase() && log.topics[0] === tradeEventTopic) {
+      if (log.address.toLowerCase() === targetCoreAddress && log.topics[0] === tradeEventTopic) {
         try {
           const parsed = iface.parseLog(log);
           const tId = Number(parsed.args.tradeId.toString());
@@ -95,7 +132,7 @@ async function batchExecute(tradeIds, reasons, supraProof, kmsProof) {
       }
     });
 
-    console.log(`[ExecuteService] Batch results: Executed: [${executedIds.join(', ')}], Skipped/Failed: [${skippedIds.join(', ')}]`);
+    console.log(`[ExecuteService] [${network.toUpperCase()}] Batch results: Executed: [${executedIds.join(', ')}], Skipped/Failed: [${skippedIds.join(', ')}]`);
 
     return {
       hash: receipt.hash,
@@ -103,13 +140,13 @@ async function batchExecute(tradeIds, reasons, supraProof, kmsProof) {
       skippedIds
     };
   } catch (error) {
-    console.error('[ExecuteService] Error executing batch on-chain:', error);
+    console.error(`[ExecuteService] [${network.toUpperCase()}] Error executing batch on-chain:`, error);
     throw error;
   }
 }
 
 module.exports = {
   batchExecute,
-  getContract: () => coreContract,
-  getProvider: () => provider
+  getContract: (network = 'testnet') => coreContracts[network],
+  getProvider: (network = 'testnet') => providers[network]
 };
