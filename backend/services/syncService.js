@@ -52,24 +52,27 @@ async function performInitialSync(network = 'testnet') {
       return;
     }
 
-    // Determine starting ID. Skip already synchronized trades to optimize time and network.
-    const startId = currentDbLastTradeId + 1;
-    if (startId > lastTradeId) {
-      console.log(`[SyncService] [${network.toUpperCase()}] Local Database is up to date.`);
-      dbService.setLastTradeId(network, lastTradeId);
-      return;
+    // Scan for missing IDs from 1 to lastTradeId
+    const trades = dbService.getTrades(network);
+    const missingIds = [];
+    for (let id = 1; id <= lastTradeId; id++) {
+      if (!trades[id]) {
+        missingIds.push(id);
+      }
     }
 
-    console.log(`[SyncService] [${network.toUpperCase()}] Syncing trade IDs from ${startId} to ${lastTradeId}...`);
-    
-    // Batch retrieve trades (500 per batch)
-    const BATCH_SIZE = 500;
-    for (let currentId = startId; currentId <= lastTradeId; currentId += BATCH_SIZE) {
-      const length = Math.min(BATCH_SIZE, lastTradeId - currentId + 1);
-      console.log(`[SyncService] [${network.toUpperCase()}] Fetching trade range: startId = ${currentId}, length = ${length}`);
+    if (missingIds.length > 0) {
+      console.log(`[SyncService] [${network.toUpperCase()}] Gap Check: Found ${missingIds.length} missing trade records. Syncing now...`);
       
-      const tradesBatch = await lensContract.getTradeRange(BigInt(currentId), BigInt(length));
-      dbService.saveTradesBatch(network, tradesBatch);
+      const BATCH_SIZE = 200;
+      for (let i = 0; i < missingIds.length; i += BATCH_SIZE) {
+        const batchIds = missingIds.slice(i, i + BATCH_SIZE);
+        console.log(`[SyncService] [${network.toUpperCase()}] Fetching missing trades batch of size ${batchIds.length}...`);
+        const tradesBatch = await lensContract.getTradesByIds(batchIds.map(BigInt));
+        dbService.saveTradesBatch(network, tradesBatch);
+      }
+    } else {
+      console.log(`[SyncService] [${network.toUpperCase()}] Gap Check: No missing trades. DB is fully populated.`);
     }
 
     dbService.setLastTradeId(network, lastTradeId);
@@ -94,19 +97,27 @@ async function checkAndSyncNewTrades(network = 'testnet') {
     const lastTradeId = Number(snapshot.lastTradeId.toString());
     const currentDbLastTradeId = dbService.getLastTradeId(network);
 
-    if (lastTradeId > currentDbLastTradeId) {
-      const count = lastTradeId - currentDbLastTradeId;
-      console.log(`[SyncService] [${network.toUpperCase()}] Periodic sync: Found ${count} new trades. Syncing IDs ${currentDbLastTradeId + 1} to ${lastTradeId}...`);
+    // Scan for missing IDs from 1 to lastTradeId
+    const trades = dbService.getTrades(network);
+    const missingIds = [];
+    for (let id = 1; id <= lastTradeId; id++) {
+      if (!trades[id]) {
+        missingIds.push(id);
+      }
+    }
+
+    if (missingIds.length > 0) {
+      console.log(`[SyncService] [${network.toUpperCase()}] Periodic Gap Check: Found ${missingIds.length} missing/new trades. Syncing...`);
       
-      const BATCH_SIZE = 500;
-      for (let currentId = currentDbLastTradeId + 1; currentId <= lastTradeId; currentId += BATCH_SIZE) {
-        const length = Math.min(BATCH_SIZE, lastTradeId - currentId + 1);
-        const tradesBatch = await lensContract.getTradeRange(BigInt(currentId), BigInt(length));
+      const BATCH_SIZE = 200;
+      for (let i = 0; i < missingIds.length; i += BATCH_SIZE) {
+        const batchIds = missingIds.slice(i, i + BATCH_SIZE);
+        const tradesBatch = await lensContract.getTradesByIds(batchIds.map(BigInt));
         dbService.saveTradesBatch(network, tradesBatch);
       }
       
       dbService.setLastTradeId(network, lastTradeId);
-      console.log(`[SyncService] [${network.toUpperCase()}] Sync complete. DB updated to trade ID ${lastTradeId}`);
+      console.log(`[SyncService] [${network.toUpperCase()}] Periodic sync complete. DB updated to trade ID ${lastTradeId}`);
     } else {
       // Periodic sync also checks if we have any pending/open trades that may need updating.
       await syncActiveTradesState(network);
