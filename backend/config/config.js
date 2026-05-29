@@ -15,6 +15,7 @@ module.exports = {
     LENS_ADDRESS: process.env.TESTNET_LENS_ADDRESS || process.env.LENS_ADDRESS || "0xD9B592d2Cb993dFcC04D893DE3e5c322bB626f84",
     PRIVATE_KEY: process.env.TESTNET_PRIVATE_KEY || process.env.PRIVATE_KEY,
     KMS_PRIVATE_KEY: process.env.TESTNET_KMS_PRIVATE_KEY || process.env.KMS_PRIVATE_KEY || "0xe12f9b03327a875c2d5bf9b40a75cd2effeed46ea508ee595c6bc708c386da8c",
+    WRITE_RPC_URL: process.env.TESTNET_WRITE_RPC_URL || null,
   },
 
   // 🚀 MAINNET CONFIGURATION
@@ -25,6 +26,7 @@ module.exports = {
     LENS_ADDRESS: process.env.MAINNET_LENS_ADDRESS || null,
     PRIVATE_KEY: process.env.MAINNET_PRIVATE_KEY || null,
     KMS_PRIVATE_KEY: process.env.MAINNET_KMS_PRIVATE_KEY || null,
+    WRITE_RPC_URL: process.env.MAINNET_WRITE_RPC_URL || null,
   },
 
   // Legacy single-env fallbacks (for any un-migrated services/routes)

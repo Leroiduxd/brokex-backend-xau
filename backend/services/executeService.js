@@ -2,37 +2,81 @@ const { ethers } = require('ethers');
 const config = require('../config/config');
 const coreAbi = require('../abi/coreAbi');
 
-// Initialize provider maps
+// Initialize public providers (used primarily for reads & fallback operations)
 const providers = {
   testnet: new ethers.JsonRpcProvider(config.testnet.RPC_URL),
   mainnet: config.mainnet.RPC_URL ? new ethers.JsonRpcProvider(config.mainnet.RPC_URL) : null
 };
 
+// Initialize write providers (used for sending gas-consuming transactions)
+const writeProviders = {
+  testnet: new ethers.JsonRpcProvider(config.testnet.WRITE_RPC_URL || config.testnet.RPC_URL),
+  mainnet: config.mainnet.WRITE_RPC_URL 
+    ? new ethers.JsonRpcProvider(config.mainnet.WRITE_RPC_URL) 
+    : (config.mainnet.RPC_URL ? new ethers.JsonRpcProvider(config.mainnet.RPC_URL) : null)
+};
+
 const wallets = {};
 const coreContracts = {};
 
-// 🧪 Testnet setups
+// 🧪 Testnet setups (bound to premium WRITE_RPC_URL by default)
 if (config.testnet.PRIVATE_KEY && config.testnet.PRIVATE_KEY !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
   try {
-    wallets.testnet = new ethers.Wallet(config.testnet.PRIVATE_KEY, providers.testnet);
+    wallets.testnet = new ethers.Wallet(config.testnet.PRIVATE_KEY, writeProviders.testnet);
     const coreAddress = (config.testnet.CORE_ADDRESS || '').toLowerCase();
     coreContracts.testnet = new ethers.Contract(coreAddress, coreAbi, wallets.testnet);
-    console.log(`[ExecuteService] [TESTNET] Ethers Wallet Signer initialized with address: ${wallets.testnet.address}`);
+    console.log(`[ExecuteService] [TESTNET] Premium Write Wallet initialized with provider: ${config.testnet.WRITE_RPC_URL ? 'ZAN Node' : 'Public Node'}`);
   } catch (err) {
-    console.error(`[ExecuteService] [TESTNET] Failed to initialize wallet: ${err.message}`);
+    console.error(`[ExecuteService] [TESTNET] Failed to initialize premium write wallet: ${err.message}`);
   }
 }
 
-// 🚀 Mainnet setups
+// 🚀 Mainnet setups (bound to premium WRITE_RPC_URL by default)
 if (config.mainnet.PRIVATE_KEY && config.mainnet.RPC_URL && config.mainnet.PRIVATE_KEY !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
   try {
-    wallets.mainnet = new ethers.Wallet(config.mainnet.PRIVATE_KEY, providers.mainnet);
+    wallets.mainnet = new ethers.Wallet(config.mainnet.PRIVATE_KEY, writeProviders.mainnet);
     const coreAddress = (config.mainnet.CORE_ADDRESS || '').toLowerCase();
     coreContracts.mainnet = new ethers.Contract(coreAddress, coreAbi, wallets.mainnet);
-    console.log(`[ExecuteService] [MAINNET] Ethers Wallet Signer initialized with address: ${wallets.mainnet.address}`);
+    console.log(`[ExecuteService] [MAINNET] Premium Write Wallet initialized with provider: ${config.mainnet.WRITE_RPC_URL ? 'Premium Node' : 'Public Node'}`);
   } catch (err) {
-    console.error(`[ExecuteService] [MAINNET] Failed to initialize wallet: ${err.message}`);
+    console.error(`[ExecuteService] [MAINNET] Failed to initialize premium write wallet: ${err.message}`);
   }
+}
+
+/**
+ * Parse logs to identify which trades successfully executed.
+ */
+function parseExecutedReceipt(receipt, network, tradeIds) {
+  const executedIds = [];
+  const skippedIds = [];
+
+  const iface = new ethers.Interface(coreAbi);
+  const tradeEventTopic = iface.getEvent('TradeEvent').topicHash;
+  const emittedTradeIds = new Set();
+  const targetCoreAddress = (config[network].CORE_ADDRESS || '').toLowerCase();
+  
+  receipt.logs.forEach(log => {
+    if (log.address.toLowerCase() === targetCoreAddress && log.topics[0] === tradeEventTopic) {
+      try {
+        const parsed = iface.parseLog(log);
+        const tId = Number(parsed.args.tradeId.toString());
+        emittedTradeIds.add(tId);
+      } catch (e) {
+        // ignore parsing error
+      }
+    }
+  });
+
+  tradeIds.forEach(id => {
+    const idNum = Number(id);
+    if (emittedTradeIds.has(idNum)) {
+      executedIds.push(idNum);
+    } else {
+      skippedIds.push(idNum);
+    }
+  });
+
+  return { executedIds, skippedIds };
 }
 
 /**
@@ -87,51 +131,55 @@ async function batchExecute(networkOrTradeIds, tradeIdsOrReasons, reasonsOrSupra
     sig: actualKmsProof.signature
   }));
 
+  let tx;
+  let tryFallback = false;
+
   try {
-    // Send transaction
-    const tx = await coreContract.batchExecute(
+    console.log(`[ExecuteService] [${network.toUpperCase()}] Sending batchExecute via primary write RPC...`);
+    tx = await coreContract.batchExecute(
       supraProof,
       tradeIds.map(id => BigInt(id)),
       reasons.map(r => Number(r)),
       riskProofs
     );
+  } catch (error) {
+    console.warn(`[ExecuteService] [${network.toUpperCase()}] ⚠️ Primary write RPC failed: ${error.message}`);
+    tryFallback = true;
+  }
 
+  // Fallback routine if primary write RPC fails
+  if (tryFallback) {
+    const fallbackProvider = providers[network];
+    const writeProvider = writeProviders[network];
+    
+    if (fallbackProvider && fallbackProvider !== writeProvider) {
+      try {
+        console.log(`[ExecuteService] [${network.toUpperCase()}] 🔄 Attempting fallback execution using public RPC: ${config[network].RPC_URL}...`);
+        const fallbackWallet = new ethers.Wallet(config[network].PRIVATE_KEY, fallbackProvider);
+        const fallbackContract = new ethers.Contract(coreContract.target, coreAbi, fallbackWallet);
+        
+        tx = await fallbackContract.batchExecute(
+          supraProof,
+          tradeIds.map(id => BigInt(id)),
+          reasons.map(r => Number(r)),
+          riskProofs
+        );
+      } catch (fallbackError) {
+        console.error(`[ExecuteService] [${network.toUpperCase()}] ❌ Fallback execution also failed:`, fallbackError.message);
+        throw fallbackError;
+      }
+    } else {
+      throw new Error(`Primary execution failed and no separate fallback provider is configured.`);
+    }
+  }
+
+  // Await and process receipt
+  try {
     console.log(`[ExecuteService] [${network.toUpperCase()}] Transaction sent: ${tx.hash}. Waiting for confirmation...`);
     const receipt = await tx.wait();
     console.log(`[ExecuteService] [${network.toUpperCase()}] Transaction confirmed in block ${receipt.blockNumber}`);
 
-    const executedIds = [];
-    const skippedIds = [];
-
-    // Parse logs to identify which trades successfully executed
-    const iface = new ethers.Interface(coreAbi);
-    const tradeEventTopic = iface.getEvent('TradeEvent').topicHash;
-
-    const emittedTradeIds = new Set();
-    const targetCoreAddress = (config[network].CORE_ADDRESS || '').toLowerCase();
-    
-    receipt.logs.forEach(log => {
-      if (log.address.toLowerCase() === targetCoreAddress && log.topics[0] === tradeEventTopic) {
-        try {
-          const parsed = iface.parseLog(log);
-          const tId = Number(parsed.args.tradeId.toString());
-          emittedTradeIds.add(tId);
-        } catch (e) {
-          // ignore parsing error
-        }
-      }
-    });
-
-    // Check which requested trade IDs were in the successfully executed set
-    tradeIds.forEach(id => {
-      const idNum = Number(id);
-      if (emittedTradeIds.has(idNum)) {
-        executedIds.push(idNum);
-      } else {
-        skippedIds.push(idNum);
-      }
-    });
-
+    const { executedIds, skippedIds } = parseExecutedReceipt(receipt, network, tradeIds);
     console.log(`[ExecuteService] [${network.toUpperCase()}] Batch results: Executed: [${executedIds.join(', ')}], Skipped/Failed: [${skippedIds.join(', ')}]`);
 
     return {
@@ -139,9 +187,9 @@ async function batchExecute(networkOrTradeIds, tradeIdsOrReasons, reasonsOrSupra
       executedIds,
       skippedIds
     };
-  } catch (error) {
-    console.error(`[ExecuteService] [${network.toUpperCase()}] Error executing batch on-chain:`, error);
-    throw error;
+  } catch (receiptError) {
+    console.error(`[ExecuteService] [${network.toUpperCase()}] Error waiting for transaction receipt:`, receiptError);
+    throw receiptError;
   }
 }
 
