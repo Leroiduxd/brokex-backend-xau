@@ -35,22 +35,13 @@ router.get('/kms-proof', async (req, res) => {
 
     const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
 
-    // Same hashing layout as Core smart contract (alphaLock removed)
-    const hash = ethers.solidityPackedKeccak256(
-      [
-        "uint256", // maxOILong
-        "uint256", // maxOIShort
-        "uint256", // spreadLong
-        "uint256", // spreadShort
-        "uint256"  // expiry
-      ],
-      [
-        MAX_OI,
-        MAX_OI,
-        SPREAD_LONG,
-        SPREAD_SHORT,
-        expiry
-      ]
+    // Same standard hashing layout as Core smart contract (abi.encode standard padding)
+    const coder = ethers.AbiCoder.defaultAbiCoder();
+    const hash = ethers.keccak256(
+      coder.encode(
+        ["uint256", "uint256", "uint256", "uint256", "uint256"],
+        [MAX_OI, MAX_OI, SPREAD_LONG, SPREAD_SHORT, expiry]
+      )
     );
 
     const signature = await signer.signMessage(
