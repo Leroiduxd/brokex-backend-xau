@@ -11,16 +11,12 @@ const signerMainnet = config.mainnet.KMS_PRIVATE_KEY
   : null;
 
 // --------------------------------------------------
-// CONFIG V1 (Risk limits)
+// CONFIG V2 (Risk limits - AlphaLock removed)
 // --------------------------------------------------
-// Super high max open interest limits
-const MAX_OI = BigInt("1000000000000000000000000000"); 
-
-// Extremely low spreads (PRECISION = 1e6, where 10 = 0.001%)
-const SPREAD_LONG  = BigInt("10");
-const SPREAD_SHORT = BigInt("10");
-
-const EXPIRY_SECONDS = 3600;
+const MAX_OI = BigInt("1000000000000000000"); // Extremely high limit (10^18)
+const SPREAD_LONG  = BigInt("100");           // Very low spread (0.01% with 1e6 precision)
+const SPREAD_SHORT = BigInt("100");           // Very low spread (0.01% with 1e6 precision)
+const EXPIRY_SECONDS = 45;                    // Proof expires in 45 seconds
 
 /**
  * GET /kms-proof?network=testnet
@@ -39,24 +35,22 @@ router.get('/kms-proof', async (req, res) => {
 
     const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
 
-    // Same standard hashing layout as Core smart contract (abi.encode equivalent)
-    const hash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(
-        [
-          "uint256", // maxOILong
-          "uint256", // maxOIShort
-          "uint256", // spreadLong
-          "uint256", // spreadShort
-          "uint256"  // expiry
-        ],
-        [
-          MAX_OI,
-          MAX_OI,
-          SPREAD_LONG,
-          SPREAD_SHORT,
-          expiry
-        ]
-      )
+    // Same hashing layout as Core smart contract (alphaLock removed)
+    const hash = ethers.solidityPackedKeccak256(
+      [
+        "uint256", // maxOILong
+        "uint256", // maxOIShort
+        "uint256", // spreadLong
+        "uint256", // spreadShort
+        "uint256"  // expiry
+      ],
+      [
+        MAX_OI,
+        MAX_OI,
+        SPREAD_LONG,
+        SPREAD_SHORT,
+        expiry
+      ]
     );
 
     const signature = await signer.signMessage(
