@@ -16,7 +16,7 @@ module.exports = [
           { "name": "maxOIShort", "type": "uint256" },
           { "name": "spreadLong", "type": "uint256" },
           { "name": "spreadShort", "type": "uint256" },
-          { "name": "expiry", "type": "uint256" },
+          { "name": "timestamp", "type": "uint256" },
           { "name": "sig", "type": "bytes" }
         ],
         "name": "riskProofs",

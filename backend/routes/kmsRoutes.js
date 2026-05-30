@@ -16,7 +16,6 @@ const signerMainnet = config.mainnet.KMS_PRIVATE_KEY
 const MAX_OI = BigInt("1000000000000000000"); // Extremely high limit (10^18)
 const SPREAD_LONG  = BigInt("100");           // Very low spread (0.01% with 1e6 precision)
 const SPREAD_SHORT = BigInt("100");           // Very low spread (0.01% with 1e6 precision)
-const EXPIRY_SECONDS = 45;                    // Proof expires in 45 seconds
 
 /**
  * GET /kms-proof?network=testnet
@@ -33,14 +32,14 @@ router.get('/kms-proof', async (req, res) => {
       });
     }
 
-    const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
+    const timestamp = Math.floor(Date.now() / 1000);
 
     // Same standard hashing layout as Core smart contract (abi.encode standard padding)
     const coder = ethers.AbiCoder.defaultAbiCoder();
     const hash = ethers.keccak256(
       coder.encode(
         ["uint256", "uint256", "uint256", "uint256", "uint256"],
-        [MAX_OI, MAX_OI, SPREAD_LONG, SPREAD_SHORT, expiry]
+        [MAX_OI, MAX_OI, SPREAD_LONG, SPREAD_SHORT, timestamp]
       )
     );
 
@@ -54,7 +53,7 @@ router.get('/kms-proof', async (req, res) => {
       maxOIShort: MAX_OI.toString(),
       spreadLong: SPREAD_LONG.toString(),
       spreadShort: SPREAD_SHORT.toString(),
-      expiry,
+      timestamp,
       signature
     });
 

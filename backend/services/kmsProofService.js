@@ -8,10 +8,9 @@ const config = require('../config/config');
  *   signer,
  *   maxOILong,
  *   maxOIShort,
- *   alphaLock,
  *   spreadLong,
  *   spreadShort,
- *   expiry,
+ *   timestamp,
  *   signature
  * }
  * Supports: getKmsProof(network)

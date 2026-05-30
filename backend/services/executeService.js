@@ -126,7 +126,7 @@ async function batchExecute(networkOrTradeIds, tradeIdsOrReasons, reasonsOrSupra
     maxOIShort: BigInt(actualKmsProof.maxOIShort),
     spreadLong: BigInt(actualKmsProof.spreadLong),
     spreadShort: BigInt(actualKmsProof.spreadShort),
-    expiry: BigInt(actualKmsProof.expiry),
+    timestamp: BigInt(actualKmsProof.timestamp),
     sig: actualKmsProof.signature
   }));
 
