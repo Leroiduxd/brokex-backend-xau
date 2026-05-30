@@ -13,12 +13,12 @@ const signerMainnet = config.mainnet.KMS_PRIVATE_KEY
 // --------------------------------------------------
 // CONFIG V1 (Risk limits)
 // --------------------------------------------------
-const MAX_OI = BigInt("1000000000000000"); // very high limit
-const ALPHA = BigInt("1000000"); // 1e6 = 100%
+// Super high max open interest limits
+const MAX_OI = BigInt("1000000000000000000000000000"); 
 
-// spread PRECISION = 1e6 (1000 = 0.1%)
-const SPREAD_LONG  = BigInt("1000");
-const SPREAD_SHORT = BigInt("1000");
+// Extremely low spreads (PRECISION = 1e6, where 10 = 0.001%)
+const SPREAD_LONG  = BigInt("10");
+const SPREAD_SHORT = BigInt("10");
 
 const EXPIRY_SECONDS = 3600;
 
@@ -39,24 +39,24 @@ router.get('/kms-proof', async (req, res) => {
 
     const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
 
-    // Same hashing layout as Core smart contract
-    const hash = ethers.solidityPackedKeccak256(
-      [
-        "uint256", // maxOILong
-        "uint256", // maxOIShort
-        "uint256", // alphaLock
-        "uint256", // spreadLong
-        "uint256", // spreadShort
-        "uint256"  // expiry
-      ],
-      [
-        MAX_OI,
-        MAX_OI,
-        ALPHA,
-        SPREAD_LONG,
-        SPREAD_SHORT,
-        expiry
-      ]
+    // Same standard hashing layout as Core smart contract (abi.encode equivalent)
+    const hash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        [
+          "uint256", // maxOILong
+          "uint256", // maxOIShort
+          "uint256", // spreadLong
+          "uint256", // spreadShort
+          "uint256"  // expiry
+        ],
+        [
+          MAX_OI,
+          MAX_OI,
+          SPREAD_LONG,
+          SPREAD_SHORT,
+          expiry
+        ]
+      )
     );
 
     const signature = await signer.signMessage(
@@ -67,7 +67,6 @@ router.get('/kms-proof', async (req, res) => {
       signer: signer.address,
       maxOILong:  MAX_OI.toString(),
       maxOIShort: MAX_OI.toString(),
-      alphaLock: ALPHA.toString(),
       spreadLong: SPREAD_LONG.toString(),
       spreadShort: SPREAD_SHORT.toString(),
       expiry,

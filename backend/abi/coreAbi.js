@@ -14,7 +14,6 @@ module.exports = [
         "components": [
           { "name": "maxOILong", "type": "uint256" },
           { "name": "maxOIShort", "type": "uint256" },
-          { "name": "alphaLock", "type": "uint256" },
           { "name": "spreadLong", "type": "uint256" },
           { "name": "spreadShort", "type": "uint256" },
           { "name": "expiry", "type": "uint256" },

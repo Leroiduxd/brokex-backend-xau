@@ -124,7 +124,6 @@ async function batchExecute(networkOrTradeIds, tradeIdsOrReasons, reasonsOrSupra
   const riskProofs = tradeIds.map(() => ({
     maxOILong: BigInt(actualKmsProof.maxOILong),
     maxOIShort: BigInt(actualKmsProof.maxOIShort),
-    alphaLock: BigInt(actualKmsProof.alphaLock),
     spreadLong: BigInt(actualKmsProof.spreadLong),
     spreadShort: BigInt(actualKmsProof.spreadShort),
     expiry: BigInt(actualKmsProof.expiry),
