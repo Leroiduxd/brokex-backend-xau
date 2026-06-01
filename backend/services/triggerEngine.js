@@ -114,9 +114,10 @@ async function handlePriceUpdate(network = 'testnet', rawPrice) {
   try {
     // 2. Fetch proofs in parallel
     console.log(`[TriggerEngine] [${network.toUpperCase()}] Fetching current Supra and KMS proofs...`);
+    const primarySupraId = executable[0] && executable[0].supraId !== undefined ? executable[0].supraId : 5500;
     const [supraProof, kmsProof] = await Promise.all([
-      supraProofService.getSupraProof([5500], network), // 5500 is XAU/USD
-      kmsProofService.getKmsProof(network)
+      supraProofService.getSupraProof([primarySupraId], network), 
+      kmsProofService.getKmsProof(network, primarySupraId)
     ]);
 
     // 3. Send batch execution to the blockchain

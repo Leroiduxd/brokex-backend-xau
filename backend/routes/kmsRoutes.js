@@ -18,8 +18,8 @@ const SPREAD_LONG  = BigInt("100");           // Very low spread (0.01% with 1e6
 const SPREAD_SHORT = BigInt("100");           // Very low spread (0.01% with 1e6 precision)
 
 /**
- * GET /kms-proof?network=testnet
- * Generates and signs a KMS/Risk proof on the fly
+ * GET /kms-proof?network=testnet&supraId=0
+ * Generates and signs a KMS/Risk proof on the fly compatible with the updated contract
  */
 router.get('/kms-proof', async (req, res) => {
   try {
@@ -32,14 +32,19 @@ router.get('/kms-proof', async (req, res) => {
       });
     }
 
+    // Default supraId to 0 (Gold) if not provided
+    const supraIdVal = req.query.supraId !== undefined ? req.query.supraId : '0';
+    const supraId = BigInt(supraIdVal);
+
     const timestamp = Math.floor(Date.now() / 1000);
 
-    // Same standard hashing layout as Core smart contract (abi.encode standard padding)
+    // Same standard hashing layout as Core smart contract:
+    // abi.encode(supraId, maxOILong, maxOIShort, spreadLong, spreadShort, timestamp)
     const coder = ethers.AbiCoder.defaultAbiCoder();
     const hash = ethers.keccak256(
       coder.encode(
-        ["uint256", "uint256", "uint256", "uint256", "uint256"],
-        [MAX_OI, MAX_OI, SPREAD_LONG, SPREAD_SHORT, timestamp]
+        ["uint256", "uint256", "uint256", "uint256", "uint256", "uint256"],
+        [supraId, MAX_OI, MAX_OI, SPREAD_LONG, SPREAD_SHORT, timestamp]
       )
     );
 
@@ -49,12 +54,14 @@ router.get('/kms-proof', async (req, res) => {
 
     res.json({
       signer: signer.address,
+      supraId: supraId.toString(),
       maxOILong:  MAX_OI.toString(),
       maxOIShort: MAX_OI.toString(),
       spreadLong: SPREAD_LONG.toString(),
       spreadShort: SPREAD_SHORT.toString(),
       timestamp,
-      signature
+      sig: signature,
+      signature: signature
     });
 
   } catch (err) {

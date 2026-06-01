@@ -170,7 +170,7 @@ router.post('/', async (req, res) => {
       console.log(`[KeeperRoute] [${network.toUpperCase()}] Fetching oracle and risk proofs...`);
       const [supraProof, kmsProof] = await Promise.all([
         supraProofService.getSupraProof(pairs, network),
-        kmsProofService.getKmsProof(network)
+        kmsProofService.getKmsProof(network, pairs[0])
       ]);
 
       // 2. Query oracle price off the Supra proof using contract staticCall

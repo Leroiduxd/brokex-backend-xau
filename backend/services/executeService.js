@@ -122,12 +122,13 @@ async function batchExecute(networkOrTradeIds, tradeIdsOrReasons, reasonsOrSupra
 
   // Construct riskProofs array matching the length of tradeIds
   const riskProofs = tradeIds.map(() => ({
+    supraId: BigInt(actualKmsProof.supraId || 0),
     maxOILong: BigInt(actualKmsProof.maxOILong),
     maxOIShort: BigInt(actualKmsProof.maxOIShort),
     spreadLong: BigInt(actualKmsProof.spreadLong),
     spreadShort: BigInt(actualKmsProof.spreadShort),
     timestamp: BigInt(actualKmsProof.timestamp),
-    sig: actualKmsProof.signature
+    sig: actualKmsProof.signature || actualKmsProof.sig
   }));
 
   let tx;

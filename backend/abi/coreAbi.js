@@ -12,6 +12,7 @@ module.exports = [
       { "name": "reasons", "type": "uint8[]" },
       {
         "components": [
+          { "name": "supraId", "type": "uint256" },
           { "name": "maxOILong", "type": "uint256" },
           { "name": "maxOIShort", "type": "uint256" },
           { "name": "spreadLong", "type": "uint256" },
