@@ -3,7 +3,11 @@ const { ethers } = require('ethers');
 const config = require('../config/config');
 const lensAbi = require('../abi/lensAbi');
 
-const router = express.Router();
+const router = Router();
+
+function Router() {
+  return express.Router();
+}
 
 // Initialize providers and contracts maps
 const providers = {
@@ -33,20 +37,23 @@ const DIR_LONG = 1;
 const DIR_SHORT = 2;
 const PRECISION = 1000000n;
 
-// KMS spreads and skew config parameters
-const BASE_SPREAD = 100n; // 0.01% base spread
-const MIN_RATIO = 1200000n; // 1.2x min ratio
-const MAX_RATIO = 2000000n; // 2.0x max ratio
-const K = 50000000000n; // 50,000 USDC with 6 decimals
+// Centralized configurations parsed to BigInt on initialization
+const MIN_RATIO = BigInt(config.KMS_MIN_RATIO || "1200000");
+const MAX_RATIO = BigInt(config.KMS_MAX_RATIO || "2000000");
+const K = BigInt(config.KMS_K || "50000000000");
+const BASE_SPREAD = BigInt(config.KMS_BASE_SPREAD || "100");
 
-// Binary search for maximum dominant open interest allowed
+// Binary search for maximum dominant open interest allowed (capped at maxGlobalOI / 2)
 function getMaxSideOI(minorityOI, buffer, minRatio, maxRatio, k, maxGlobalOI) {
+  const cap = maxGlobalOI / 2n;
+
   if (minorityOI === 0n) {
-    return buffer;
+    return buffer > cap ? cap : buffer;
   }
 
+  // Binary search range capped at maxGlobalOI / 2
   let low = minorityOI;
-  let high = maxGlobalOI;
+  let high = cap;
   let ans = minorityOI;
 
   const k2 = k * k;
@@ -77,8 +84,8 @@ function getMaxSideOI(minorityOI, buffer, minRatio, maxRatio, k, maxGlobalOI) {
     ans = buffer - minorityOI;
   }
 
-  if (ans > maxGlobalOI) {
-    ans = maxGlobalOI;
+  if (ans > cap) {
+    ans = cap;
   }
 
   return ans;
@@ -113,12 +120,12 @@ function calculateSkewSpread(direction, longOI, shortOI, baseSpread) {
 }
 
 /**
- * Main proof builder function
+ * Main proof builder function (universally applied across testnet & mainnet)
  */
 async function buildKmsProof(network, supraIdVal) {
   const supraId = BigInt(supraIdVal || '0');
 
-  // Rule 3: Only asset 5500 is allowed. Any other assetId MUST NOT be signed.
+  // Only asset 5500 is allowed. Any other assetId MUST NOT be signed.
   if (supraId !== 5500n) {
     return { error: 'nap', status: 403 };
   }
@@ -133,7 +140,7 @@ async function buildKmsProof(network, supraIdVal) {
     return { error: `Lens contract instance for ${network.toUpperCase()} is not initialized.`, status: 400 };
   }
 
-  // Rule 2: The backend MUST read protocol state directly from getAssetSnapshot(assetId)
+  // Read protocol state directly from getAssetSnapshot(assetId)
   const snapshot = await lensContract.getAssetSnapshot(supraId);
   
   const openInterestLong = BigInt(snapshot.openInterestLong.toString());
@@ -144,34 +151,17 @@ async function buildKmsProof(network, supraIdVal) {
   // Buffer is dynamic: 10% of global OI
   const buffer = maxGlobalOI / 10n;
 
-  let maxOILong, maxOIShort;
+  // Universally calculate values for all networks (no testnet bypass)
+  const maxOILong = getMaxSideOI(openInterestShort, buffer, MIN_RATIO, MAX_RATIO, K, maxGlobalOI);
+  const maxOIShort = getMaxSideOI(openInterestLong, buffer, MIN_RATIO, MAX_RATIO, K, maxGlobalOI);
+
   let spreadLong, spreadShort;
-
-  if (network === 'testnet') {
-    // For testnet, keep max open interest super high as requested
-    maxOILong = 1000000000000000000n; // 1e18
-    maxOIShort = 1000000000000000000n; // 1e18
-    
-    // Spread calculation: baseSpread or skew spread depending on totalOpenInterest vs buffer
-    if (totalOpenInterest <= buffer) {
-      spreadLong = BASE_SPREAD;
-      spreadShort = BASE_SPREAD;
-    } else {
-      spreadLong = calculateSkewSpread(DIR_LONG, openInterestLong, openInterestShort, BASE_SPREAD);
-      spreadShort = calculateSkewSpread(DIR_SHORT, openInterestLong, openInterestShort, BASE_SPREAD);
-    }
+  if (totalOpenInterest <= buffer) {
+    spreadLong = BASE_SPREAD;
+    spreadShort = BASE_SPREAD;
   } else {
-    // For mainnet, compute actual OI skew/imbalance constraints strictly
-    maxOILong = getMaxSideOI(openInterestShort, buffer, MIN_RATIO, MAX_RATIO, K, maxGlobalOI);
-    maxOIShort = getMaxSideOI(openInterestLong, buffer, MIN_RATIO, MAX_RATIO, K, maxGlobalOI);
-
-    if (totalOpenInterest <= buffer) {
-      spreadLong = BASE_SPREAD;
-      spreadShort = BASE_SPREAD;
-    } else {
-      spreadLong = calculateSkewSpread(DIR_LONG, openInterestLong, openInterestShort, BASE_SPREAD);
-      spreadShort = calculateSkewSpread(DIR_SHORT, openInterestLong, openInterestShort, BASE_SPREAD);
-    }
+    spreadLong = calculateSkewSpread(DIR_LONG, openInterestLong, openInterestShort, BASE_SPREAD);
+    spreadShort = calculateSkewSpread(DIR_SHORT, openInterestLong, openInterestShort, BASE_SPREAD);
   }
 
   const timestamp = Math.floor(Date.now() / 1000);

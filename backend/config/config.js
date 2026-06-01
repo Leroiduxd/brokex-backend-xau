@@ -7,6 +7,12 @@ module.exports = {
   // API Key for the Supra oracle
   SUPRA_API_KEY: process.env.SUPRA_API_KEY || "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2",
 
+  // Centralized KMS Parameters (dynamic off-chain spread & OI config)
+  KMS_MIN_RATIO: process.env.KMS_MIN_RATIO || "1200000",
+  KMS_MAX_RATIO: process.env.KMS_MAX_RATIO || "2000000",
+  KMS_K: process.env.KMS_K || "50000000000",
+  KMS_BASE_SPREAD: process.env.KMS_BASE_SPREAD || "100",
+
   // 🧪 PHAROS TESTNET CONFIGURATION
   testnet: {
     RPC_URL: process.env.TESTNET_RPC_URL || process.env.RPC_URL || "https://atlantic.dplabs-internal.com",
