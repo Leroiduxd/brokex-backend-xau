@@ -2,19 +2,8 @@ const { ethers } = require('ethers');
 const config = require('../config/config');
 const coreAbi = require('../abi/coreAbi');
 
-// Initialize public providers (used primarily for reads & fallback operations)
-const providers = {
-  testnet: new ethers.JsonRpcProvider(config.testnet.RPC_URL),
-  mainnet: config.mainnet.RPC_URL ? new ethers.JsonRpcProvider(config.mainnet.RPC_URL) : null
-};
-
-// Initialize write providers (used for sending gas-consuming transactions)
-const writeProviders = {
-  testnet: new ethers.JsonRpcProvider(config.testnet.WRITE_RPC_URL || config.testnet.RPC_URL),
-  mainnet: config.mainnet.WRITE_RPC_URL 
-    ? new ethers.JsonRpcProvider(config.mainnet.WRITE_RPC_URL) 
-    : (config.mainnet.RPC_URL ? new ethers.JsonRpcProvider(config.mainnet.RPC_URL) : null)
-};
+// Centralized rate-limited providers
+const { readProviders: providers, writeProviders } = require('./providerService');
 
 const wallets = {};
 const coreContracts = {};

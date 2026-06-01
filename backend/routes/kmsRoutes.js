@@ -9,16 +9,13 @@ function Router() {
   return express.Router();
 }
 
-// Initialize providers and contracts maps
-const providers = {
-  testnet: new ethers.JsonRpcProvider(config.testnet.RPC_URL),
-  mainnet: config.mainnet.RPC_URL ? new ethers.JsonRpcProvider(config.mainnet.RPC_URL) : null
-};
+// Import centrally managed, rate-limited providers
+const { readProviders } = require('../services/providerService');
 
 const lensContracts = {
-  testnet: new ethers.Contract((config.testnet.LENS_ADDRESS || '').toLowerCase(), lensAbi, providers.testnet),
+  testnet: new ethers.Contract((config.testnet.LENS_ADDRESS || '').toLowerCase(), lensAbi, readProviders.testnet),
   mainnet: config.mainnet.RPC_URL && config.mainnet.LENS_ADDRESS 
-    ? new ethers.Contract((config.mainnet.LENS_ADDRESS || '').toLowerCase(), lensAbi, providers.mainnet) 
+    ? new ethers.Contract((config.mainnet.LENS_ADDRESS || '').toLowerCase(), lensAbi, readProviders.mainnet) 
     : null
 };
 

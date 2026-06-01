@@ -3,16 +3,12 @@ const config = require('../config/config');
 const lensAbi = require('../abi/lensAbi');
 const dbService = require('./dbService');
 
-// Initialize providers and contracts maps
-const providers = {
-  testnet: new ethers.JsonRpcProvider(config.testnet.RPC_URL),
-  mainnet: config.mainnet.RPC_URL ? new ethers.JsonRpcProvider(config.mainnet.RPC_URL) : null
-};
+const { readProviders } = require('./providerService');
 
 const lensContracts = {
-  testnet: new ethers.Contract((config.testnet.LENS_ADDRESS || '').toLowerCase(), lensAbi, providers.testnet),
+  testnet: new ethers.Contract((config.testnet.LENS_ADDRESS || '').toLowerCase(), lensAbi, readProviders.testnet),
   mainnet: config.mainnet.RPC_URL && config.mainnet.LENS_ADDRESS 
-    ? new ethers.Contract((config.mainnet.LENS_ADDRESS || '').toLowerCase(), lensAbi, providers.mainnet) 
+    ? new ethers.Contract((config.mainnet.LENS_ADDRESS || '').toLowerCase(), lensAbi, readProviders.mainnet) 
     : null
 };
 
