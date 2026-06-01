@@ -15,7 +15,7 @@ module.exports = {
 
   // 🧪 PHAROS TESTNET CONFIGURATION
   testnet: {
-    RPC_URL: process.env.TESTNET_RPC_URL || process.env.TESTNET_WRITE_RPC_URL || process.env.RPC_URL || "https://atlantic.dplabs-internal.com",
+    RPC_URL: process.env.TESTNET_RPC_URL || process.env.RPC_URL || "https://atlantic.dplabs-internal.com",
     WS_URL: process.env.TESTNET_WS_URL || process.env.WS_URL || "wss://atlantic.dplabs-internal.com",
     CORE_ADDRESS: process.env.TESTNET_CORE_ADDRESS || process.env.CORE_ADDRESS || "0x302d139487Dcb7bd0Fa3466aF51049a70EAF4353",
     LENS_ADDRESS: process.env.TESTNET_LENS_ADDRESS || process.env.LENS_ADDRESS || "0xD9B592d2Cb993dFcC04D893DE3e5c322bB626f84",
@@ -26,7 +26,7 @@ module.exports = {
 
   // 🚀 MAINNET CONFIGURATION
   mainnet: {
-    RPC_URL: process.env.MAINNET_RPC_URL || process.env.MAINNET_WRITE_RPC_URL || null,
+    RPC_URL: process.env.MAINNET_RPC_URL || null,
     WS_URL: process.env.MAINNET_WS_URL || null,
     CORE_ADDRESS: process.env.MAINNET_CORE_ADDRESS || null,
     LENS_ADDRESS: process.env.MAINNET_LENS_ADDRESS || null,
