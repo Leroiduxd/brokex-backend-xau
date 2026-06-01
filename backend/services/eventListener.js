@@ -48,12 +48,20 @@ function startEventListener(network = 'testnet') {
 
     const websocket = wsProvider.websocket;
     
-    websocket.on('open', () => {
+    websocket.on('open', async () => {
       console.log(`[EventListener] [${network.toUpperCase()}] WebSocket connection successfully established.`);
       connectionStates[network] = false;
       
       // Bind event logic
       setupTradeEventListener(network);
+
+      // Perform a full check/sync to fill any missing gaps during downtime
+      console.log(`[EventListener] [${network.toUpperCase()}] Re-syncing trade gaps post-reconnection...`);
+      try {
+        await syncService.performInitialSync(network);
+      } catch (err) {
+        console.error(`[EventListener] [${network.toUpperCase()}] Post-reconnection re-sync failed:`, err.message);
+      }
     });
 
     websocket.on('close', (code, reason) => {
