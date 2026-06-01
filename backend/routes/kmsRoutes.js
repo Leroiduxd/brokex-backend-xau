@@ -148,8 +148,8 @@ async function buildKmsProof(network, supraIdVal) {
   const totalOpenInterest = BigInt(snapshot.totalOpenInterest.toString());
   const maxGlobalOI = BigInt(snapshot.config.maxGlobalOI.toString());
 
-  // Buffer is dynamic: 10% of global OI
-  const buffer = maxGlobalOI / 10n;
+  // Buffer is dynamic: 10% of half of global OI
+  const buffer = (maxGlobalOI / 2n) / 10n;
 
   // Universally calculate values for all networks (no testnet bypass)
   const maxOILong = getMaxSideOI(openInterestShort, buffer, MIN_RATIO, MAX_RATIO, K, maxGlobalOI);
