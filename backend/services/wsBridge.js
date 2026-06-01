@@ -52,6 +52,7 @@ let currentWSSet = [];
 let supraWS = null;
 let wss = null;
 let goldWss = null; // 🟢 WSS dédié à l'or (XAU_USD)
+let spreadWss = null; // 🟢 WSS dédié aux spreads KMS (/ws/kms ou /ws/spread)
 
 // 🔻 Watchdog d’inactivité Supra
 let supraWSLastActivity = 0;
@@ -238,6 +239,24 @@ function buildGoldSnapshot() {
         out[p] = buildPageForPair(p);
     }
     return JSON.stringify(out);
+}
+
+let kmsRoutes = null;
+function buildSpreadPayload() {
+    if (!kmsRoutes) {
+        try {
+            kmsRoutes = require('../routes/kmsRoutes');
+        } catch (e) {}
+    }
+    const result = {
+        testnet: { spreadLong: "100", spreadShort: "100" },
+        mainnet: { spreadLong: "100", spreadShort: "100" }
+    };
+    if (kmsRoutes && typeof kmsRoutes.getLatestSpreads === 'function') {
+        result.testnet = kmsRoutes.getLatestSpreads('testnet');
+        result.mainnet = kmsRoutes.getLatestSpreads('mainnet');
+    }
+    return JSON.stringify(result);
 }
 
 function setsDiff(a, b) {
@@ -499,6 +518,44 @@ function attachPriceWSS() {
             try { c.ping(); } catch {}
         });
     }, 30000);
+
+    // 3. 🟢 Initialisation du WSS Spreads KMS (/ws/spread ou /ws/kms)
+    spreadWss = new WebSocketServer({
+        noServer: true,
+        perMessageDeflate: {
+            zlibDeflateOptions: { level: 9 },
+            zlibInflateOptions: { chunkSize: 1024 },
+            clientNoContextTakeover: true,
+            serverNoContextTakeover: true,
+            threshold: 0
+        }
+    });
+
+    console.log('✅ KMS Spread WSS mounted at /ws/spread & /ws/kms');
+
+    spreadWss.on('connection', (ws) => {
+        console.log('🟢 KMS Spread WS client connected');
+        try { ws.send(buildSpreadPayload()); } catch {}
+        ws.isAlive = true;
+        ws.on('pong', () => { ws.isAlive = true; });
+    });
+
+    setInterval(() => {
+        const payload = buildSpreadPayload();
+        spreadWss.clients.forEach((c) => {
+            if (c.readyState === WebSocket.OPEN) {
+                try { c.send(payload); } catch {}
+            }
+        });
+    }, 1000);
+
+    setInterval(() => {
+        spreadWss.clients.forEach((c) => {
+            if (c.isAlive === false) c.terminate();
+            c.isAlive = false;
+            try { c.ping(); } catch {}
+        });
+    }, 30000);
 }
 
 // 🟢 Gestion propre de l'Upgrade HTTP -> WS en fonction du chemin d'accès (Pathname)
@@ -524,6 +581,15 @@ function handlePriceUpgrade(req, socket, head) {
         }
         goldWss.handleUpgrade(req, socket, head, (ws) => {
             goldWss.emit('connection', ws, req);
+        });
+    } else if (pathname === '/ws/spread' || pathname === '/ws/spread/' || pathname === '/ws/kms' || pathname === '/ws/kms/') {
+        if (!spreadWss) {
+            console.warn('[wsBridge Upgrade] spreadWss instance not initialized');
+            socket.destroy();
+            return;
+        }
+        spreadWss.handleUpgrade(req, socket, head, (ws) => {
+            spreadWss.emit('connection', ws, req);
         });
     } else {
         console.warn(`[wsBridge Upgrade] Path ${pathname} does not match any route, destroying socket`);

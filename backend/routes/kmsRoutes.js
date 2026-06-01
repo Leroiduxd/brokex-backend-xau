@@ -76,7 +76,7 @@ async function updateSnapshotCache(network) {
  * Initialize 10-second polling worker
  */
 function startPollingWorker() {
-  console.log("[KMS-Cache] Starting background polling worker (10-second interval)...");
+  console.log("[KMS-Cache] Starting background polling worker (5-second interval)...");
   
   // Initial prime
   updateSnapshotCache('testnet');
@@ -90,7 +90,7 @@ function startPollingWorker() {
     if (config.mainnet.RPC_URL && config.mainnet.LENS_ADDRESS) {
       updateSnapshotCache('mainnet');
     }
-  }, 10000);
+  }, 5000);
 }
 
 // Boot worker
@@ -328,5 +328,35 @@ router.get(['/kms-proof', '/kms-proof/:supraId'], async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
+// Getter function to expose dynamic KMS calculated spreads to other modules (like WebSockets)
+router.getLatestSpreads = function(network = 'testnet') {
+  const cached = snapshotCache[network];
+  if (!cached) {
+    return {
+      spreadLong: BASE_SPREAD.toString(),
+      spreadShort: BASE_SPREAD.toString(),
+      lastUpdated: Date.now()
+    };
+  }
+
+  const { openInterestLong, openInterestShort, totalOpenInterest, maxGlobalOI } = cached;
+  const buffer = (maxGlobalOI / 2n) / 10n;
+
+  let spreadLong, spreadShort;
+  if (totalOpenInterest <= buffer) {
+    spreadLong = BASE_SPREAD;
+    spreadShort = BASE_SPREAD;
+  } else {
+    spreadLong = calculateSkewSpread(DIR_LONG, openInterestLong, openInterestShort, BASE_SPREAD);
+    spreadShort = calculateSkewSpread(DIR_SHORT, openInterestLong, openInterestShort, BASE_SPREAD);
+  }
+
+  return {
+    spreadLong: spreadLong.toString(),
+    spreadShort: spreadShort.toString(),
+    lastUpdated: cached.lastUpdated
+  };
+};
 
 module.exports = router;
