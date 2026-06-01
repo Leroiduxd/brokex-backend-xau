@@ -15,9 +15,6 @@ module.exports = [
       {
         "components": [
           { "name": "lastTradeId", "type": "uint256" },
-          { "name": "openInterestLong", "type": "uint256" },
-          { "name": "openInterestShort", "type": "uint256" },
-          { "name": "totalOpenInterest", "type": "uint256" },
           { "name": "paused", "type": "bool" },
           { "name": "emergencyMode", "type": "bool" },
           { "name": "coreOwner", "type": "address" },
@@ -26,24 +23,9 @@ module.exports = [
           { "name": "lpFreeCapital", "type": "uint256" },
           { "name": "lpLockedCapital", "type": "uint256" },
           { "name": "vaultUsageBps", "type": "uint256" },
-          { "name": "totalPayoutPaid", "type": "uint256" },
           { "name": "vaultOwner", "type": "address" },
           { "name": "vaultCore", "type": "address" },
-          { "name": "coreLocked", "type": "bool" },
-          {
-            "components": [
-              { "name": "minLeverage", "type": "uint256" },
-              { "name": "maxLeverage", "type": "uint256" },
-              { "name": "minTradeSize", "type": "uint256" },
-              { "name": "commissionBps", "type": "uint256" },
-              { "name": "fundingRateHourly", "type": "uint256" },
-              { "name": "profitCap", "type": "uint256" },
-              { "name": "executionTolerance", "type": "uint256" },
-              { "name": "maxProofAge", "type": "uint256" }
-            ],
-            "name": "config",
-            "type": "tuple"
-          }
+          { "name": "coreLocked", "type": "bool" }
         ],
         "name": "s",
         "type": "tuple"
