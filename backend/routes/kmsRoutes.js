@@ -18,10 +18,10 @@ const SPREAD_LONG  = BigInt("100");           // Very low spread (0.01% with 1e6
 const SPREAD_SHORT = BigInt("100");           // Very low spread (0.01% with 1e6 precision)
 
 /**
- * GET /kms-proof?network=testnet&supraId=0
+ * GET /kms-proof/:supraId or GET /kms-proof?supraId=0
  * Generates and signs a KMS/Risk proof on the fly compatible with the updated contract
  */
-router.get('/kms-proof', async (req, res) => {
+router.get(['/kms-proof', '/kms-proof/:supraId'], async (req, res) => {
   try {
     const network = req.query.network || 'testnet';
     const signer = network === 'mainnet' ? signerMainnet : signerTestnet;
@@ -32,8 +32,13 @@ router.get('/kms-proof', async (req, res) => {
       });
     }
 
-    // Default supraId to 0 (Gold) if not provided
-    const supraIdVal = req.query.supraId !== undefined ? req.query.supraId : '0';
+    // Support both path parameter /kms-proof/5500 and query parameter ?supraId=5500
+    let supraIdVal = '0';
+    if (req.params.supraId !== undefined) {
+      supraIdVal = req.params.supraId;
+    } else if (req.query.supraId !== undefined) {
+      supraIdVal = req.query.supraId;
+    }
     const supraId = BigInt(supraIdVal);
 
     const timestamp = Math.floor(Date.now() / 1000);
