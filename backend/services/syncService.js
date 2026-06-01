@@ -93,6 +93,7 @@ async function checkAndSyncNewTrades(network = 'testnet') {
 
   const lensContract = lensContracts[network];
   try {
+    console.log(`[SyncService] [${network.toUpperCase()}] Periodic Gap Check initiated...`);
     const snapshot = await lensContract.getProtocolSnapshot();
     const lastTradeId = Number(snapshot.lastTradeId.toString());
     const currentDbLastTradeId = dbService.getLastTradeId(network);
@@ -119,6 +120,7 @@ async function checkAndSyncNewTrades(network = 'testnet') {
       dbService.setLastTradeId(network, lastTradeId);
       console.log(`[SyncService] [${network.toUpperCase()}] Periodic sync complete. DB updated to trade ID ${lastTradeId}`);
     } else {
+      console.log(`[SyncService] [${network.toUpperCase()}] Periodic Gap Check: DB is fully synchronized (up to trade ID ${lastTradeId}). Checking active states...`);
       // Periodic sync also checks if we have any pending/open trades that may need updating.
       await syncActiveTradesState(network);
     }
@@ -143,8 +145,12 @@ async function syncActiveTradesState(network = 'testnet') {
       return state === 0 || state === 1; // STATE_ORDER or STATE_OPEN
     }).map(Number);
 
-    if (activeIds.length === 0) return;
+    if (activeIds.length === 0) {
+      console.log(`[SyncService] [${network.toUpperCase()}] Verification: 0 active positions/orders in DB. Nothing to update.`);
+      return;
+    }
 
+    console.log(`[SyncService] [${network.toUpperCase()}] Verification: Fetching latest states for ${activeIds.length} active trade(s) from contract...`);
     // Fetch the updated states/stops from contract in batches of 200
     const BATCH_SIZE = 200;
     for (let i = 0; i < activeIds.length; i += BATCH_SIZE) {
@@ -152,6 +158,7 @@ async function syncActiveTradesState(network = 'testnet') {
       const updatedTrades = await lensContract.getTradesByIds(batchIds.map(BigInt));
       dbService.saveTradesBatch(network, updatedTrades);
     }
+    console.log(`[SyncService] [${network.toUpperCase()}] Verification: Successfully updated active trades state in DB.`);
   } catch (err) {
     console.error(`[SyncService] [${network.toUpperCase()}] Safety active state update failed:`, err.message);
   }
@@ -161,7 +168,7 @@ async function syncActiveTradesState(network = 'testnet') {
  * Setup a continuous 30-second polling interval for checkAndSyncNewTrades.
  */
 function startPeriodicSync() {
-  console.log('[SyncService] Launching periodic synchronization (interval: 30 seconds) for all configured networks');
+  console.log('[SyncService] Launching periodic synchronization (interval: 10 seconds) for all configured networks');
   setInterval(async () => {
     // 🧪 Sync Testnet
     await checkAndSyncNewTrades('testnet');
@@ -170,7 +177,7 @@ function startPeriodicSync() {
     if (isNetworkConfigured('mainnet')) {
       await checkAndSyncNewTrades('mainnet');
     }
-  }, 30000);
+  }, 10000);
 }
 
 /**

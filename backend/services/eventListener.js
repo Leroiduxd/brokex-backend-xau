@@ -6,6 +6,7 @@ const syncService = require('./syncService');
 const wsProviders = {};
 const coreContractsWs = {};
 const connectionStates = { testnet: false, mainnet: false };
+const pingIntervals = {};
 
 /**
  * Check if the given network is fully configured in .env.
@@ -62,6 +63,18 @@ function startEventListener(network = 'testnet') {
       } catch (err) {
         console.error(`[EventListener] [${network.toUpperCase()}] Post-reconnection re-sync failed:`, err.message);
       }
+
+      // Set up continuous heartbeat ping every 20 seconds to keep the RPC node connection alive
+      if (pingIntervals[network]) clearInterval(pingIntervals[network]);
+      pingIntervals[network] = setInterval(() => {
+        if (websocket.readyState === 1) { // OPEN
+          try {
+            websocket.ping();
+          } catch (e) {
+            console.error(`[EventListener] [${network.toUpperCase()}] WebSocket heartbeat ping failed:`, e.message);
+          }
+        }
+      }, 20000);
     });
 
     websocket.on('close', (code, reason) => {
@@ -111,6 +124,11 @@ function setupTradeEventListener(network) {
  */
 function cleanup(network) {
   connectionStates[network] = false;
+
+  if (pingIntervals[network]) {
+    clearInterval(pingIntervals[network]);
+    delete pingIntervals[network];
+  }
   
   const coreContractWs = coreContractsWs[network];
   if (coreContractWs) {
