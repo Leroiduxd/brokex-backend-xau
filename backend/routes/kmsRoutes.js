@@ -43,6 +43,59 @@ const MAX_RATIO = BigInt(config.KMS_MAX_RATIO || "2000000");
 const K = BigInt(config.KMS_K || "50000000000");
 const BASE_SPREAD = BigInt(config.KMS_BASE_SPREAD || "100");
 
+// Memory cache for asset 5500 snapshots across networks
+const snapshotCache = {
+  testnet: null,
+  mainnet: null
+};
+
+/**
+ * Background worker to fetch snapshot and update cache
+ */
+async function updateSnapshotCache(network) {
+  try {
+    const lensContract = lensContracts[network];
+    if (!lensContract) return;
+
+    // We fetch for asset 5500n
+    const snapshot = await lensContract.getAssetSnapshot(5500n);
+    snapshotCache[network] = {
+      openInterestLong: BigInt(snapshot.openInterestLong.toString()),
+      openInterestShort: BigInt(snapshot.openInterestShort.toString()),
+      totalOpenInterest: BigInt(snapshot.totalOpenInterest.toString()),
+      maxGlobalOI: BigInt(snapshot.config.maxGlobalOI.toString()),
+      lastUpdated: Date.now()
+    };
+    console.log(`[KMS-Cache] [${network.toUpperCase()}] Snapshot successfully cached.`);
+  } catch (err) {
+    console.error(`[KMS-Cache] [${network.toUpperCase()}] Background sync failed:`, err.message);
+  }
+}
+
+/**
+ * Initialize 10-second polling worker
+ */
+function startPollingWorker() {
+  console.log("[KMS-Cache] Starting background polling worker (10-second interval)...");
+  
+  // Initial prime
+  updateSnapshotCache('testnet');
+  if (config.mainnet.RPC_URL && config.mainnet.LENS_ADDRESS) {
+    updateSnapshotCache('mainnet');
+  }
+
+  // Periodic worker
+  setInterval(() => {
+    updateSnapshotCache('testnet');
+    if (config.mainnet.RPC_URL && config.mainnet.LENS_ADDRESS) {
+      updateSnapshotCache('mainnet');
+    }
+  }, 10000);
+}
+
+// Boot worker
+startPollingWorker();
+
 // Binary search for maximum dominant open interest allowed (capped at maxGlobalOI / 2)
 function getMaxSideOI(minorityOI, buffer, minRatio, maxRatio, k, maxGlobalOI) {
   const cap = maxGlobalOI / 2n;
@@ -120,7 +173,7 @@ function calculateSkewSpread(direction, longOI, shortOI, baseSpread) {
 }
 
 /**
- * Main proof builder function (universally applied across testnet & mainnet)
+ * Main proof builder function (instantaneous cache-driven generation)
  */
 async function buildKmsProof(network, supraIdVal) {
   const supraId = BigInt(supraIdVal || '0');
@@ -135,23 +188,31 @@ async function buildKmsProof(network, supraIdVal) {
     return { error: `KMS Private Key for ${network.toUpperCase()} is not configured in .env.`, status: 400 };
   }
 
-  const lensContract = lensContracts[network];
-  if (!lensContract) {
-    return { error: `Lens contract instance for ${network.toUpperCase()} is not initialized.`, status: 400 };
+  // Attempt to read from memory cache
+  let cached = snapshotCache[network];
+  if (!cached) {
+    console.warn(`[KMS-Cache] Cache miss for ${network.toUpperCase()}. Fetching synchronously...`);
+    const lensContract = lensContracts[network];
+    if (!lensContract) {
+      return { error: `Lens contract instance for ${network.toUpperCase()} is not initialized.`, status: 400 };
+    }
+    
+    // Synchronous fallback to guarantee zero uptime disruption
+    const snapshot = await lensContract.getAssetSnapshot(supraId);
+    cached = {
+      openInterestLong: BigInt(snapshot.openInterestLong.toString()),
+      openInterestShort: BigInt(snapshot.openInterestShort.toString()),
+      totalOpenInterest: BigInt(snapshot.totalOpenInterest.toString()),
+      maxGlobalOI: BigInt(snapshot.config.maxGlobalOI.toString())
+    };
   }
-
-  // Read protocol state directly from getAssetSnapshot(assetId)
-  const snapshot = await lensContract.getAssetSnapshot(supraId);
   
-  const openInterestLong = BigInt(snapshot.openInterestLong.toString());
-  const openInterestShort = BigInt(snapshot.openInterestShort.toString());
-  const totalOpenInterest = BigInt(snapshot.totalOpenInterest.toString());
-  const maxGlobalOI = BigInt(snapshot.config.maxGlobalOI.toString());
+  const { openInterestLong, openInterestShort, totalOpenInterest, maxGlobalOI } = cached;
 
   // Buffer is dynamic: 10% of half of global OI
   const buffer = (maxGlobalOI / 2n) / 10n;
 
-  // Universally calculate values for all networks (no testnet bypass)
+  // Universally calculate values for all networks
   const maxOILong = getMaxSideOI(openInterestShort, buffer, MIN_RATIO, MAX_RATIO, K, maxGlobalOI);
   const maxOIShort = getMaxSideOI(openInterestLong, buffer, MIN_RATIO, MAX_RATIO, K, maxGlobalOI);
 
