@@ -55,6 +55,7 @@ function formatTrade(t) {
   return {
     id: t.id ? Number(t.id.toString()) : 0,
     trader: t.trader,
+    supraId: t.supraId !== undefined ? Number(t.supraId.toString()) : 0,
     state: t.state !== undefined ? Number(t.state.toString()) : 0,
     direction: t.direction !== undefined ? Number(t.direction.toString()) : 0,
     orderType: t.orderType !== undefined ? Number(t.orderType.toString()) : 0,
@@ -88,7 +89,8 @@ function formatTrade(t) {
     })(),
     maxProfit: t.maxProfit ? t.maxProfit.toString() : "0",
     openTimestamp: t.openTimestamp ? Number(t.openTimestamp.toString()) : 0,
-    closeTimestamp: t.closeTimestamp ? Number(t.closeTimestamp.toString()) : 0
+    closeTimestamp: t.closeTimestamp ? Number(t.closeTimestamp.toString()) : 0,
+    guaranteedSL: t.guaranteedSL !== undefined ? !!t.guaranteedSL : false
   };
 }
 

@@ -63,21 +63,21 @@ module.exports = [
         "components": [
           { "name": "id", "type": "uint256" },
           { "name": "trader", "type": "address" },
+          { "name": "supraId", "type": "uint256" },
           { "name": "state", "type": "uint8" },
           { "name": "direction", "type": "uint8" },
           { "name": "orderType", "type": "uint8" },
           { "name": "margin", "type": "uint256" },
           { "name": "leverage", "type": "uint256" },
-          { "name": "openInterest", "type": "uint256" },
           { "name": "targetPrice", "type": "uint256" },
           { "name": "openPrice", "type": "uint256" },
           { "name": "closePrice", "type": "uint256" },
           { "name": "stopLoss", "type": "uint256" },
           { "name": "takeProfit", "type": "uint256" },
-          { "name": "liqPrice", "type": "uint256" },
-          { "name": "maxProfit", "type": "uint256" },
           { "name": "openTimestamp", "type": "uint256" },
-          { "name": "closeTimestamp", "type": "uint256" }
+          { "name": "closeTimestamp", "type": "uint256" },
+          { "name": "liqPrice", "type": "uint256" },
+          { "name": "guaranteedSL", "type": "bool" }
         ],
         "name": "result",
         "type": "tuple[]"
@@ -96,21 +96,21 @@ module.exports = [
         "components": [
           { "name": "id", "type": "uint256" },
           { "name": "trader", "type": "address" },
+          { "name": "supraId", "type": "uint256" },
           { "name": "state", "type": "uint8" },
           { "name": "direction", "type": "uint8" },
           { "name": "orderType", "type": "uint8" },
           { "name": "margin", "type": "uint256" },
           { "name": "leverage", "type": "uint256" },
-          { "name": "openInterest", "type": "uint256" },
           { "name": "targetPrice", "type": "uint256" },
           { "name": "openPrice", "type": "uint256" },
           { "name": "closePrice", "type": "uint256" },
           { "name": "stopLoss", "type": "uint256" },
           { "name": "takeProfit", "type": "uint256" },
-          { "name": "liqPrice", "type": "uint256" },
-          { "name": "maxProfit", "type": "uint256" },
           { "name": "openTimestamp", "type": "uint256" },
-          { "name": "closeTimestamp", "type": "uint256" }
+          { "name": "closeTimestamp", "type": "uint256" },
+          { "name": "liqPrice", "type": "uint256" },
+          { "name": "guaranteedSL", "type": "bool" }
         ],
         "name": "result",
         "type": "tuple[]"
