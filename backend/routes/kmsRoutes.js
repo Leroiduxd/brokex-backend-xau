@@ -60,8 +60,7 @@ router.get('/kms-proof', async (req, res) => {
       spreadLong: SPREAD_LONG.toString(),
       spreadShort: SPREAD_SHORT.toString(),
       timestamp,
-      sig: signature,
-      signature: signature
+      sig: signature
     });
 
   } catch (err) {

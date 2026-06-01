@@ -128,7 +128,7 @@ async function batchExecute(networkOrTradeIds, tradeIdsOrReasons, reasonsOrSupra
     spreadLong: BigInt(actualKmsProof.spreadLong),
     spreadShort: BigInt(actualKmsProof.spreadShort),
     timestamp: BigInt(actualKmsProof.timestamp),
-    sig: actualKmsProof.signature || actualKmsProof.sig
+    sig: actualKmsProof.sig
   }));
 
   let tx;
