@@ -138,5 +138,128 @@ module.exports = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "assetId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getAssetSnapshot",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "supraId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "openInterestLong",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "openInterestShort",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "totalOpenInterest",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "minLeverage",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "maxLeverage",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "minTradeSize",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "commissionBps",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "borrowRateHourly",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "profitCap",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "executionTolerance",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "maxProofAge",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "maxTraderOI",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "maxGlobalOI",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "lockedCapitalBps",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "liqThresholdBps",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "guaranteedSLFeeBps",
+                "type": "uint256"
+              },
+              {
+                "internalType": "bool",
+                "name": "listed",
+                "type": "bool"
+              },
+              {
+                "internalType": "bool",
+                "name": "frozen",
+                "type": "bool"
+              }
+            ],
+            "internalType": "struct IBrokexCore.AssetConfig",
+            "name": "config",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct BrokexLens.AssetSnapshot",
+        "name": "s",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ];
