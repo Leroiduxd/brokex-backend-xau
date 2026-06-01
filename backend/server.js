@@ -240,7 +240,7 @@ server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
-  if (pathname === '/ws/prices' || pathname === '/ws/gold' || pathname === '/ws/xau') {
+  if (pathname === '/ws/prices' || pathname === '/ws/gold' || pathname === '/ws/xau' || pathname === '/ws/spread' || pathname === '/ws/kms') {
     // Route to Supra WS Bridge
     wsBridge.handlePriceUpgrade(req, socket, head);
   } else if (pathname === '/' || pathname === '/ws/pyth' || pathname === '/pyth') {
