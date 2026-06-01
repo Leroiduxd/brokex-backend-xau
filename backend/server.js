@@ -194,10 +194,14 @@ const server = app.listen(PORT, async () => {
   }
 
   try {
-    // 1. Boot up: perform initial trade sync up to highest block Trade ID for both environments
-    await syncService.performInitialSync('testnet');
+    // 1. Boot up: perform initial trade sync up to highest block Trade ID for both environments (asynchronously)
+    syncService.performInitialSync('testnet').catch(err => {
+      console.error('[Server] Testnet initial sync failed:', err.message);
+    });
     if (isNetworkConfigured('mainnet')) {
-      await syncService.performInitialSync('mainnet');
+      syncService.performInitialSync('mainnet').catch(err => {
+        console.error('[Server] Mainnet initial sync failed:', err.message);
+      });
     }
 
     // 2. Schedule continuous safety check every 30 seconds (runs both internally)
