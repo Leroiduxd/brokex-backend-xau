@@ -17,6 +17,7 @@ const priceStreamService = require('./services/priceStreamService');
 const chartSyncService = require('./services/chartSyncService');
 const wsBridge = require('./services/wsBridge');
 const pythPriceDiffService = require('./services/pythPriceDiffService');
+const balanceMonitorService = require('./services/balanceMonitorService');
 
 const app = express();
 
@@ -228,6 +229,9 @@ const server = app.listen(PORT, async () => {
 
     // 8. Start Pyth price differences hourly fetch & persist
     await pythPriceDiffService.start();
+
+    // 9. Start Mainnet Executor balance monitor
+    balanceMonitorService.start();
 
     console.log(`[Server] All dual-network subsystems started successfully!`);
   } catch (error) {
