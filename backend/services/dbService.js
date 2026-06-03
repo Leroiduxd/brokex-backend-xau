@@ -2,6 +2,7 @@ const low = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
 const path = require('path');
 const fs = require('fs');
+const notificationService = require('./notificationService');
 
 // Ensure database directory exists
 const dbDir = path.join(__dirname, '../database');
@@ -169,8 +170,15 @@ module.exports = {
       data = tradeData;
     }
     const db = getDb(network);
+    const oldTrade = db.get(`trades.${targetId}`).value() || null;
     const formatted = formatTrade(data);
     db.set(`trades.${targetId}`, formatted).write();
+
+    try {
+      notificationService.handleTradeTransition(network, oldTrade, formatted);
+    } catch (err) {
+      console.error(`[dbService] setTrade notification trigger error:`, err.message);
+    }
   },
 
   /**
@@ -199,9 +207,17 @@ module.exports = {
       const idNum = Number(idStr);
       if (idNum === 0) return; // Skip non-existent trades (returned as zeros by Solidity range query)
       
-      tradesObj[idStr] = formatTrade(t);
+      const oldTrade = tradesObj[idStr] || null;
+      const newTrade = formatTrade(t);
+      tradesObj[idStr] = newTrade;
       if (idNum > maxId) {
         maxId = idNum;
+      }
+
+      try {
+        notificationService.handleTradeTransition(network, oldTrade, newTrade);
+      } catch (err) {
+        console.error(`[dbService] saveTradesBatch notification trigger error:`, err.message);
       }
     });
 
