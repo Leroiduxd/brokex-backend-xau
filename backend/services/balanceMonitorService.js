@@ -54,12 +54,15 @@ class BalanceMonitorService {
         const now = Date.now();
         // Limit notifications to once per hour (3,600,000 ms)
         if (now - this.lastNotificationTime >= 60 * 60 * 1000) {
-          this.lastNotificationTime = now;
           const title = `⚠️ Solde Faible Exécuteur Mainnet`;
           const message = `Le solde de l'exécuteur (${this.address.slice(0, 6)}...${this.address.slice(-4)}) est de ${balanceEth.toFixed(4)} ETH/PR. Inférieur au seuil de 0.10. Recharger au plus vite !`;
           const tags = 'warning,moneybag,alarm_clock';
 
-          notificationService.send(title, message, tags).catch(err => {
+          notificationService.send(title, message, tags).then(success => {
+            if (success) {
+              this.lastNotificationTime = now;
+            }
+          }).catch(err => {
             console.error(`[BalanceMonitor] Notification sending error:`, err.message);
           });
         }

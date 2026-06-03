@@ -13,7 +13,7 @@ class NotificationService {
    * @param {string} tags 
    */
   async send(title, message, tags = '') {
-    if (!this.topic) return;
+    if (!this.topic) return false;
 
     try {
       console.log(`[NotificationService] Sending alert to ntfy.sh/${this.topic}: ${title} - ${message}`);
@@ -35,9 +35,12 @@ class NotificationService {
       });
       if (!response.ok) {
         console.error(`[NotificationService] Failed to send ntfy alert: ${response.statusText}`);
+        return false;
       }
+      return true;
     } catch (err) {
       console.error(`[NotificationService] Error sending ntfy alert:`, err.message);
+      return false;
     }
   }
 
