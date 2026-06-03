@@ -17,8 +17,12 @@ class NotificationService {
 
     try {
       console.log(`[NotificationService] Sending alert to ntfy.sh/${this.topic}: ${title} - ${message}`);
+      
+      // RFC 2047 Base64 encoding to support emojis and non-ASCII characters in headers
+      const encodedTitle = `=?utf-8?B?${Buffer.from(title).toString('base64')}?=`;
+
       const headers = {
-        'Title': title,
+        'Title': encodedTitle,
         'Priority': 'default'
       };
       if (tags) {
