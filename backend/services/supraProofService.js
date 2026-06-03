@@ -94,7 +94,7 @@ class PullServiceClient {
 // ─────────────────────────────────────────────────────────────
 const clients = {
   testnet: new PullServiceClient('https://rpc-testnet-dora-2.supra.com'),
-  mainnet: new PullServiceClient('https://mainnet-dora-2.supra.com:443')
+  mainnet: new PullServiceClient('https://rpc-mainnet-dora-2.supra.com')
 };
 
 const cache = new Map(); // key = "network:pairs" ; value = { proof, timestamp }
