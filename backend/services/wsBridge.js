@@ -196,8 +196,18 @@ function buildPageForPair(p) {
     const s = state[p] || {};
     // Toujours renvoyer le dernier prix connu disponible (WS, REST ou fallback Pyth)
     const price = s.wsPriceStr || s.restPriceStr;
-    const time = s.wsTime || s.restTime || String(Math.floor(Date.now() / 1000));
-    const ts = s.wsTimestamp || s.restTimestamp || Date.now();
+    
+    let time = s.wsTime || s.restTime;
+    let ts = s.wsTimestamp || s.restTimestamp;
+    
+    // Si le dernier prix reçu a plus de 2 secondes, ou si aucun timestamp n'est défini,
+    // on met à jour le timestamp/time avec l'heure actuelle pour que le flux WSS continue à avancer.
+    const now = Date.now();
+    const lastUpdateMs = s.lastWsMs || s.lastRestMs || 0;
+    if (now - lastUpdateMs > 2000 || !ts || !time) {
+        time = String(Math.floor(now / 1000));
+        ts = now;
+    }
     
     const haveAny = price || s.h24 || s.l24 || s.ch24 || time || ts;
     const instruments = haveAny ? [{
